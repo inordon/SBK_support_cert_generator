@@ -18,6 +18,8 @@ class CertificateRequest(BaseModel):
     valid_to: date = Field(..., description="Дата окончания действия")
     users_count: int = Field(..., ge=1, description="Количество пользователей")
     created_by: int = Field(..., description="Telegram ID создателя")
+    created_by_username: Optional[str] = Field(None, description="Telegram username создателя")
+    created_by_full_name: Optional[str] = Field(None, description="Полное имя создателя")
 
     @validator('domain')
     def validate_domain(cls, v):
@@ -135,6 +137,8 @@ class Certificate(BaseModel):
     users_count: int = Field(..., description="Количество пользователей")
     created_at: datetime = Field(default_factory=datetime.now, description="Дата создания")
     created_by: int = Field(..., description="Telegram ID создателя")
+    created_by_username: Optional[str] = Field(None, description="Telegram username создателя")
+    created_by_full_name: Optional[str] = Field(None, description="Полное имя создателя")
     is_active: bool = Field(default=True, description="Активен ли сертификат")
 
     @property
@@ -146,6 +150,16 @@ class Certificate(BaseModel):
     def is_expired(self) -> bool:
         """Проверяет, истек ли срок действия сертификата."""
         return date.today() > self.valid_to
+
+    @property
+    def creator_display_name(self) -> str:
+        """Возвращает отображаемое имя создателя."""
+        if self.created_by_full_name:
+            return self.created_by_full_name
+        elif self.created_by_username:
+            return f"@{self.created_by_username}"
+        else:
+            return f"ID: {self.created_by}"
 
     @property
     def days_left(self) -> int:

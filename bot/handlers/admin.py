@@ -342,7 +342,9 @@ async def process_confirmation(message: Message, state: FSMContext):
             valid_from=data['valid_from'],
             valid_to=data['valid_to'],
             users_count=data['users_count'],
-            created_by=message.from_user.id
+            created_by=message.from_user.id,
+            created_by_username=message.from_user.username,
+            created_by_full_name=message.from_user.full_name
         )
 
         # Создаем сертификат
@@ -359,26 +361,32 @@ async def process_confirmation(message: Message, state: FSMContext):
 
         # Отправляем уведомление в группу
         try:
-            notification_text = (
-                f"🆕 Создан новый сертификат\n\n"
-                f"🆔 ID: `{certificate.certificate_id}`\n"
-                f"🌐 Домен: {certificate.domain}\n"
-                f"🏢 ИНН: {certificate.inn}\n"
-                f"📅 Период: {certificate.validity_period}\n"
-                f"👥 Пользователей: {certificate.users_count}\n"
-                f"👤 Создатель: {message.from_user.full_name} ({message.from_user.id})"
-            )
+            # Проверяем, настроена ли группа для уведомлений
+            if settings.notification_group and settings.notification_group != 0:
+                notification_text = (
+                    f"🆕 Создан новый сертификат\n\n"
+                    f"🆔 ID: `{certificate.certificate_id}`\n"
+                    f"🌐 Домен: {certificate.domain}\n"
+                    f"🏢 ИНН: {certificate.inn}\n"
+                    f"📅 Период: {certificate.validity_period}\n"
+                    f"👥 Пользователей: {certificate.users_count}\n"
+                    f"👤 Создатель: {certificate.creator_display_name}"
+                )
 
-            # Получаем бота из контекста
-            bot = message.bot
-            await bot.send_message(
-                chat_id=settings.notification_group,
-                text=notification_text,
-                parse_mode="Markdown"
-            )
+                # Получаем бота из контекста
+                bot = message.bot
+                await bot.send_message(
+                    chat_id=settings.notification_group,
+                    text=notification_text,
+                    parse_mode="Markdown"
+                )
+                logger.info("Уведомление отправлено в группу")
+            else:
+                logger.info("Группа для уведомлений не настроена, пропускаем отправку")
 
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления в группу: {e}")
+            logger.warning(f"Не удалось отправить уведомление в группу: {e}")
+            # Не прерываем выполнение, просто логируем ошибку
 
         await state.clear()
 

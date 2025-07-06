@@ -65,6 +65,8 @@ class CertificateService:
                 "valid_to": request.valid_to,
                 "users_count": request.users_count,
                 "created_by": str(request.created_by),
+                "created_by_username": request.created_by_username,
+                "created_by_full_name": request.created_by_full_name,
                 "is_active": True  # Явно устанавливаем значение
             }
 
@@ -288,7 +290,7 @@ class CertificateService:
         if detailed:
             info.extend([
                 f"📝 Создан: {certificate.created_at.strftime('%d.%m.%Y %H:%M')}",
-                f"👤 Создатель: {certificate.created_by}"
+                f"👤 Создатель: {certificate.creator_display_name}"
             ])
 
         return "\n".join(info)
@@ -351,6 +353,8 @@ class CertificateService:
             users_count=db_certificate.users_count,
             created_at=db_certificate.created_at,
             created_by=created_by_int,
+            created_by_username=getattr(db_certificate, 'created_by_username', None),
+            created_by_full_name=getattr(db_certificate, 'created_by_full_name', None),
             is_active=is_active
         )
 

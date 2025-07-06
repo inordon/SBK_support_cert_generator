@@ -38,6 +38,8 @@ class Certificate(Base):
     # Метаданные
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_by = Column(String(20), nullable=False)  # Telegram user ID как строка
+    created_by_username = Column(String(100), nullable=True)  # Telegram username
+    created_by_full_name = Column(String(200), nullable=True)  # Полное имя пользователя
     is_active = Column(Boolean, default=True, server_default=text('true'), nullable=False, index=True)
 
     # Индексы для оптимизации поиска
@@ -197,6 +199,8 @@ class CertificateRepository:
             cert_users_count = certificate.users_count
             cert_created_at = certificate.created_at
             cert_created_by = certificate.created_by
+            cert_created_by_username = certificate.created_by_username
+            cert_created_by_full_name = certificate.created_by_full_name
             cert_is_active = certificate.is_active
 
             # Добавляем запись в историю
@@ -220,6 +224,8 @@ class CertificateRepository:
         new_certificate.users_count = cert_users_count
         new_certificate.created_at = cert_created_at
         new_certificate.created_by = cert_created_by
+        new_certificate.created_by_username = cert_created_by_username
+        new_certificate.created_by_full_name = cert_created_by_full_name
         new_certificate.is_active = cert_is_active
 
         return new_certificate
