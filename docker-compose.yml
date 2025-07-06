@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # PostgreSQL база данных
   postgres:
@@ -7,12 +9,12 @@ services:
       POSTGRES_DB: certificates_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # Передаем пароль для cert_app через переменную окружения
-      POSTGRES_CERT_APP_PASSWORD: ${CERT_APP_PASSWORD}
+      CERT_APP_PASSWORD: ${CERT_APP_PASSWORD}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./database/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/02-create-user.sh:/docker-entrypoint-initdb.d/02-create-user.sh:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     networks:
@@ -24,7 +26,7 @@ services:
       retries: 5
       start_period: 30s
 
-  # Redis для хранения состояний FSM (опционально)
+  # Redis для хранения состояний FSM
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -53,6 +55,7 @@ services:
       API_KEY: ${API_KEY}
       CERTIFICATES_DIR: /app/certificates
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONUNBUFFERED: 1
     volumes:
       - certificates_data:/app/certificates:rw
       - api_logs:/app/logs:rw
@@ -86,6 +89,7 @@ services:
       NOTIFICATION_CHAT: ${NOTIFICATION_CHAT}
       CERTIFICATES_DIR: /app/certificates
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONUNBUFFERED: 1
     volumes:
       - certificates_data:/app/certificates:rw
       - bot_logs:/app/logs:rw
@@ -110,10 +114,6 @@ volumes:
     driver: local
   certificates_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${CERTIFICATES_PATH:-./certificates}
   api_logs:
     driver: local
   bot_logs:
@@ -122,6 +122,3 @@ volumes:
 networks:
   cert_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.19.0.0/16
