@@ -1,3 +1,5 @@
+# config/settings.py - добавим автосоздание директорий
+
 """
 Настройки приложения, загружаемые из переменных окружения.
 """
@@ -48,6 +50,11 @@ class Settings(BaseSettings):
     backup_enabled: bool = Field(default=False, env="BACKUP_ENABLED", description="Включить резервное копирование")
     backup_schedule: str = Field(default="0 2 * * *", env="BACKUP_SCHEDULE", description="Расписание резервного копирования")
     max_backup_files: int = Field(default=30, env="MAX_BACKUP_FILES", description="Максимальное количество файлов бэкапа")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Создаем директории сразу при инициализации
+        self.create_directories()
 
     @property
     def database_url(self) -> str:
@@ -115,14 +122,24 @@ class Settings(BaseSettings):
 
     def create_directories(self):
         """Создает необходимые директории."""
-        # Создаем директорию для сертификатов
-        self.certificates_path.mkdir(parents=True, exist_ok=True)
+        try:
+            # Создаем директорию для сертификатов
+            self.certificates_path.mkdir(parents=True, exist_ok=True)
+            print(f"✅ Создана директория для сертификатов: {self.certificates_path}")
 
-        # Создаем директорию для логов
-        self.log_file.parent.mkdir(parents=True, exist_ok=True)
+            # Создаем директорию для логов
+            self.log_file.parent.mkdir(parents=True, exist_ok=True)
+            print(f"✅ Создана директория для логов: {self.log_file.parent}")
 
-        print(f"Создана директория для сертификатов: {self.certificates_path}")
-        print(f"Создана директория для логов: {self.log_file.parent}")
+            # Проверяем права доступа
+            if not os.access(self.certificates_path, os.W_OK):
+                print(f"⚠️  Нет прав записи в {self.certificates_path}")
+
+            if not os.access(self.log_file.parent, os.W_OK):
+                print(f"⚠️  Нет прав записи в {self.log_file.parent}")
+
+        except Exception as e:
+            print(f"❌ Ошибка создания директорий: {e}")
 
     class Config:
         """Конфигурация настроек."""

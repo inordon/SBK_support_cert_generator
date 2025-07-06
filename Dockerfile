@@ -38,7 +38,8 @@ WORKDIR /app
 
 # Создаем директории для данных с правильными правами
 RUN mkdir -p /app/certificates /app/logs && \
-    chown -R botuser:botuser /app
+    chown -R botuser:botuser /app && \
+    chmod 755 /app/certificates /app/logs
 
 # Копируем код приложения
 COPY --chown=botuser:botuser . .
