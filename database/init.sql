@@ -197,6 +197,23 @@ SELECT
     ) as history
 FROM certificates c;
 
+-- Создание пользователя приложения
+CREATE USER cert_app WITH PASSWORD :'CERT_APP_PASSWORD';
+
+-- Предоставление прав на схему certificates
+GRANT USAGE ON SCHEMA certificates TO cert_app;
+
+-- Предоставление прав на таблицы
+GRANT SELECT, INSERT, UPDATE, DELETE ON certificates TO cert_app;
+GRANT SELECT, INSERT ON certificate_history TO cert_app;
+
+-- Предоставление прав на представления
+GRANT SELECT ON active_certificates TO cert_app;
+GRANT SELECT ON certificates_with_history TO cert_app;
+
+-- Предоставление прав на последовательности
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA certificates TO cert_app;
+
 -- Комментарии к таблицам и столбцам
 COMMENT ON TABLE certificates IS 'Основная таблица сертификатов';
 COMMENT ON COLUMN certificates.certificate_id IS 'Уникальный ID сертификата в формате XXXXX-XXXXX-XXXXX-XXXXX';
