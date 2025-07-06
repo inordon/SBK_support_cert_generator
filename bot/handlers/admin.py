@@ -336,6 +336,8 @@ async def process_confirmation(message: Message, state: FSMContext):
 
     try:
         # Создаем запрос на сертификат
+        logger.info(f"Создание запроса сертификата для пользователя {message.from_user.id}")
+
         certificate_request = CertificateRequest(
             domain=data['domain'],
             inn=data['inn'],
@@ -347,16 +349,19 @@ async def process_confirmation(message: Message, state: FSMContext):
             created_by_full_name=message.from_user.full_name
         )
 
+        logger.info(f"Запрос создан: {certificate_request}")
+
         # Создаем сертификат
+        logger.info("Вызываем сервис создания сертификата")
         certificate, has_existing = certificate_service.create_certificate(certificate_request)
+        logger.info(f"Сертификат создан успешно: {certificate.certificate_id}")
 
         # Форматируем информацию о созданном сертификате
         cert_info = certificate_service.format_certificate_info(certificate, detailed=True)
 
         await message.answer(
             f"✅ Сертификат успешно создан!\n\n{cert_info}",
-            reply_markup=get_main_menu_admin(),
-            parse_mode="Markdown"
+            reply_markup=get_main_menu_admin()
         )
 
         # Отправляем уведомление в группу
@@ -365,7 +370,7 @@ async def process_confirmation(message: Message, state: FSMContext):
             if settings.notification_group and settings.notification_group != 0:
                 notification_text = (
                     f"🆕 Создан новый сертификат\n\n"
-                    f"🆔 ID: `{certificate.certificate_id}`\n"
+                    f"🆔 ID: {certificate.certificate_id}\n"
                     f"🌐 Домен: {certificate.domain}\n"
                     f"🏢 ИНН: {certificate.inn}\n"
                     f"📅 Период: {certificate.validity_period}\n"
@@ -377,8 +382,7 @@ async def process_confirmation(message: Message, state: FSMContext):
                 bot = message.bot
                 await bot.send_message(
                     chat_id=settings.notification_group,
-                    text=notification_text,
-                    parse_mode="Markdown"
+                    text=notification_text
                 )
                 logger.info("Уведомление отправлено в группу")
             else:
@@ -391,7 +395,7 @@ async def process_confirmation(message: Message, state: FSMContext):
         await state.clear()
 
     except Exception as e:
-        logger.error(f"Ошибка создания сертификата: {e}")
+        logger.error(f"Ошибка создания сертификата: {e}", exc_info=True)
 
         if isinstance(e, ValidationError):
             error_text = f"❌ Ошибка валидации: {e}"

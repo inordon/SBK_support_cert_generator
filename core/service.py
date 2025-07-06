@@ -270,7 +270,7 @@ class CertificateService:
             str: Отформатированная информация
         """
         info = [
-            f"🆔 ID: `{certificate.certificate_id}`",
+            f"🆔 ID: {certificate.certificate_id}",
             f"🌐 Домен: {certificate.domain}",
             f"🏢 ИНН: {certificate.inn}",
             f"📅 Период: {certificate.validity_period}",
