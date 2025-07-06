@@ -11,6 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./database/set_password.sql:/docker-entrypoint-initdb.d/02-set_password.sql:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     networks:

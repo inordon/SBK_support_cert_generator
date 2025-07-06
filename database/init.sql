@@ -209,7 +209,7 @@ SELECT
 FROM certificates c;
 
 -- Создание пользователя для приложения
-CREATE USER cert_app WITH PASSWORD 'change_this_password';
+CREATE ROLE cert_app WITH LOGIN;
 
 -- Предоставление прав
 GRANT USAGE ON SCHEMA certificates TO cert_app;
