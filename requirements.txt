@@ -1,21 +1,21 @@
-# requirements.txt
-# Основные зависимости (исправлены конфликты версий)
-asyncpg==0.29.0
+# Core frameworks
 aiogram==3.4.1
-fastapi==0.110.0
-uvicorn[standard]==0.27.1
-pydantic>=2.4.1,<2.6
-python-multipart==0.0.9
+pydantic==2.5.3
+pydantic-settings==2.1.0
 
-# Дополнительные зависимости
-redis==5.0.1
+# Database
+sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
+alembic==1.13.1
 
-# Утилиты
-python-dotenv==1.0.1
-click==8.1.7
+# Utilities
+python-dotenv==1.0.0
+pytz==2023.4
 
-# Тестирование (только базовые для запуска)
-pytest==8.0.2
-pytest-asyncio==0.23.5
-httpx==0.27.0
+# Development and testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-mock==3.12.0
+
+# Logging and monitoring
+structlog==23.2.0

@@ -1,203 +1,221 @@
 """
-Главный модуль Telegram бота
+Основной файл для запуска Telegram бота.
 """
+
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
 
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.fsm.storage.redis import RedisStorage
-
-# Добавляем путь к модулям
+# Добавляем корневую директорию в путь для импортов
 sys.path.append(str(Path(__file__).parent.parent))
 
-from core.storage import DatabaseStorage, FileStorage
-from bot.handlers import CertificateHandlers
+from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+
+from config.settings import get_settings, validate_settings
+from core.database import get_db_manager
+from .middleware import setup_middlewares
+from .handlers import common, admin, verify
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/bot.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 
-class CertificateBot:
-    """Главный класс Telegram бота"""
+async def create_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
+    """
+    Создает экземпляры бота и диспетчера.
 
-    def __init__(self):
-        self.setup_logging()
-        self.load_config()
-        self.setup_storage()
-        self.setup_bot()
+    Returns:
+        tuple[Bot, Dispatcher]: Кортеж с ботом и диспетчером
+    """
+    settings = get_settings()
 
-    def setup_logging(self):
-        """Настройка логирования"""
-        log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    # Создаем бота с настройками по умолчанию
+    bot = Bot(
+        token=settings.bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    )
 
-        # Создаем директорию для логов если её нет
-        log_dir = Path('logs')
-        log_dir.mkdir(exist_ok=True)
+    # Создаем диспетчер с хранилищем состояний в памяти
+    storage = MemoryStorage()
+    dp = Dispatcher(storage=storage)
 
-        logging.basicConfig(
-            level=getattr(logging, log_level),
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler('logs/bot.log'),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
+    return bot, dp
 
-    def load_config(self):
-        """Загрузка конфигурации"""
-        # Обязательные параметры
-        self.bot_token = os.getenv('BOT_TOKEN')
-        if not self.bot_token:
-            raise ValueError("BOT_TOKEN не найден в переменных окружения")
 
-        # Права пользователей
-        allowed_users_str = os.getenv('ALLOWED_USERS', '')
-        self.allowed_users = set(
-            int(user_id.strip())
-            for user_id in allowed_users_str.split(',')
-            if user_id.strip().isdigit()
-        )
+def setup_handlers(dp: Dispatcher):
+    """
+    Настройка обработчиков команд.
 
-        verify_users_str = os.getenv('VERIFY_USERS', '')
-        self.verify_users = set(
-            int(user_id.strip())
-            for user_id in verify_users_str.split(',')
-            if user_id.strip().isdigit()
-        )
+    Args:
+        dp: Диспетчер aiogram
+    """
+    # Порядок важен! Сначала специфичные обработчики, потом общие
 
-        # Чат для уведомлений
-        notification_chat_str = os.getenv('NOTIFICATION_CHAT')
-        self.notification_chat = int(notification_chat_str) if notification_chat_str else None
+    # Обработчики для администраторов (создание сертификатов)
+    dp.include_router(admin.router)
 
-        # База данных
-        self.database_url = os.getenv('DATABASE_URL')
-        if not self.database_url:
-            raise ValueError("DATABASE_URL не найден в переменных окружения")
+    # Обработчики для проверки сертификатов
+    dp.include_router(verify.router)
 
-        # Файловое хранилище
-        self.certificates_dir = os.getenv('CERTIFICATES_DIR', 'certificates')
+    # Общие обработчики (должны быть последними)
+    dp.include_router(common.router)
 
-        # Redis для FSM (опционально)
-        self.redis_url = os.getenv('REDIS_URL')
+    logger.info("Обработчики команд настроены")
 
-        self.logger.info(f"Загружена конфигурация: {len(self.allowed_users)} генераторов, "
-                         f"{len(self.verify_users)} проверяющих")
 
-    def setup_storage(self):
-        """Настройка хранилищ"""
-        # База данных
-        self.db_storage = DatabaseStorage(self.database_url)
+async def setup_bot_commands(bot: Bot):
+    """
+    Настройка команд бота в меню.
 
-        # Файловое хранилище
-        self.file_storage = FileStorage(self.certificates_dir)
+    Args:
+        bot: Экземпляр бота
+    """
+    from aiogram.types import BotCommand
 
-        self.logger.info("Хранилища настроены")
+    commands = [
+        BotCommand(command="start", description="🚀 Запустить бота"),
+        BotCommand(command="help", description="❓ Справка по командам"),
+        BotCommand(command="cancel", description="❌ Отменить текущую операцию"),
+        BotCommand(command="status", description="📊 Статистика (только админы)"),
+    ]
 
-    def setup_bot(self):
-        """Настройка бота"""
-        # Создание бота
-        self.bot = Bot(
-            token=self.bot_token,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-        )
+    await bot.set_my_commands(commands)
+    logger.info("Команды бота настроены")
 
-        # Настройка хранилища состояний
-        if self.redis_url:
-            storage = RedisStorage.from_url(self.redis_url)
-            self.logger.info("Используется Redis для хранения состояний")
-        else:
-            storage = MemoryStorage()
-            self.logger.info("Используется Memory storage для хранения состояний")
 
-        # Создание диспетчера
-        self.dp = Dispatcher(storage=storage)
+async def check_bot_permissions(bot: Bot):
+    """
+    Проверяет права бота и его настройки.
 
-        # Создание обработчиков
-        self.handlers = CertificateHandlers(
-            db_storage=self.db_storage,
-            file_storage=self.file_storage,
-            allowed_users=self.allowed_users,
-            verify_users=self.verify_users,
-            notification_chat=self.notification_chat
-        )
+    Args:
+        bot: Экземпляр бота
+    """
+    try:
+        bot_info = await bot.get_me()
+        logger.info(f"Бот запущен: @{bot_info.username} ({bot_info.full_name})")
 
-        # Регистрация роутера
-        self.dp.include_router(self.handlers.router)
-
-        # Middleware для логирования
-        @self.dp.message.middleware()
-        async def logging_middleware(handler, event, data):
-            user = event.from_user
-            self.logger.info(f"Сообщение от {user.id} (@{user.username}): {event.text}")
-            return await handler(event, data)
-
-        # Обработчик ошибок
-        @self.dp.error()
-        async def error_handler(event, exception):
-            self.logger.error(f"Ошибка в боте: {exception}", exc_info=True)
-
-    async def start(self):
-        """Запуск бота с retry логикой"""
-        max_retries = 5
-        retry_delay = 5
-
-        # Подключение к БД с retry
-        for attempt in range(max_retries):
-            try:
-                await self.db_storage.connect()
-                self.logger.info("Подключение к БД установлено")
-                break
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    self.logger.warning(
-                        f"Попытка подключения к БД {attempt + 1}/{max_retries} не удалась: {e}"
-                    )
-                    await asyncio.sleep(retry_delay)
-                else:
-                    self.logger.error("Не удалось подключиться к БД после всех попыток")
-                    raise
-
+        # Проверяем возможность отправки сообщений в группу уведомлений
+        settings = get_settings()
         try:
-            # Получение информации о боте
-            bot_info = await self.bot.get_me()
-            self.logger.info(f"Бот запущен: @{bot_info.username}")
-
-            # Запуск поллинга
-            await self.dp.start_polling(self.bot)
-
+            await bot.send_message(
+                chat_id=settings.notification_group,
+                text="🤖 Бот запущен и готов к работе!"
+            )
+            logger.info("Уведомление о запуске отправлено в группу")
         except Exception as e:
-            self.logger.error(f"Ошибка запуска бота: {e}")
-            raise
-        finally:
-            # Закрытие соединений
-            await self.db_storage.disconnect()
-            await self.bot.session.close()
+            logger.warning(f"Не удалось отправить уведомление в группу: {e}")
 
-    async def stop(self):
-        """Остановка бота"""
-        self.logger.info("Остановка бота...")
-        await self.db_storage.disconnect()
-        await self.bot.session.close()
+    except Exception as e:
+        logger.error(f"Ошибка проверки прав бота: {e}")
+        raise
+
+
+async def on_startup():
+    """Действия при запуске бота."""
+    logger.info("Запуск бота...")
+
+    # Проверяем настройки
+    if not validate_settings():
+        logger.error("Некорректные настройки. Запуск невозможен.")
+        sys.exit(1)
+
+    # Проверяем подключение к БД
+    db_manager = get_db_manager()
+    if not db_manager.health_check():
+        logger.error("Не удалось подключиться к базе данных. Запуск невозможен.")
+        sys.exit(1)
+
+    # Создаем таблицы если их нет
+    try:
+        db_manager.create_tables()
+        logger.info("Таблицы базы данных проверены/созданы")
+    except Exception as e:
+        logger.error(f"Ошибка создания таблиц БД: {e}")
+        sys.exit(1)
+
+    logger.info("Инициализация завершена успешно")
+
+
+async def on_shutdown():
+    """Действия при завершении работы бота."""
+    logger.info("Завершение работы бота...")
+
+    # Отправляем уведомление о завершении работы
+    try:
+        settings = get_settings()
+        bot = Bot.get_current()
+        await bot.send_message(
+            chat_id=settings.notification_group,
+            text="🔴 Бот остановлен"
+        )
+    except Exception as e:
+        logger.warning(f"Не удалось отправить уведомление об остановке: {e}")
+
+    logger.info("Бот завершил работу")
 
 
 async def main():
-    """Главная функция"""
-    bot = CertificateBot()
-
+    """Основная функция запуска бота."""
     try:
-        await bot.start()
+        # Выполняем действия при запуске
+        await on_startup()
+
+        # Создаем бота и диспетчер
+        bot, dp = await create_bot_and_dispatcher()
+
+        # Настраиваем middleware
+        setup_middlewares(dp)
+
+        # Настраиваем обработчики
+        setup_handlers(dp)
+
+        # Настраиваем команды бота
+        await setup_bot_commands(bot)
+
+        # Проверяем права бота
+        await check_bot_permissions(bot)
+
+        # Регистрируем функции lifecycle
+        dp.startup.register(on_startup)
+        dp.shutdown.register(on_shutdown)
+
+        logger.info("Бот готов к работе. Начинаем polling...")
+
+        # Запускаем polling
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+
     except KeyboardInterrupt:
-        print("\nОстановка бота...")
+        logger.info("Получен сигнал остановки")
     except Exception as e:
-        logging.error(f"Критическая ошибка: {e}")
+        logger.error(f"Критическая ошибка: {e}")
         sys.exit(1)
     finally:
-        await bot.stop()
+        await on_shutdown()
 
 
-if __name__ == '__main__':
-    asyncio.run(main())
+def run_bot():
+    """Запускает бота в синхронном режиме."""
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Бот остановлен пользователем")
+    except Exception as e:
+        logger.error(f"Ошибка запуска бота: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    run_bot()

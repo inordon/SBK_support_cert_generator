@@ -1,162 +1,312 @@
 """
-Валидаторы для входных данных
+Модуль валидации входных данных для сертификатов.
 """
+
 import re
-from datetime import datetime, timedelta
-from typing import Tuple
+from datetime import date, datetime
+from typing import List, Tuple
+from .exceptions import *
 
 
-class ValidationError(Exception):
-    """Исключение для ошибок валидации"""
-    pass
+class DomainValidator:
+    """Валидатор доменных имен с поддержкой wildcard."""
 
+    def __init__(self):
+        # Паттерн для валидации части домена (может содержать дефисы, но не в начале/конце)
+        self.domain_part_pattern = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$')
+        # Паттерн для полного домена
+        self.domain_pattern = re.compile(r'^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$')
 
-class Validators:
-    """Класс для валидации входных данных"""
-
-    @staticmethod
-    def validate_domain(domain: str) -> bool:
+    def validate(self, domain: str) -> bool:
         """
-        Валидация домена с поддержкой wildcard
+        Валидация доменного имени.
 
         Args:
-            domain: Доменное имя для проверки
+            domain: Доменное имя для валидации
 
         Returns:
-            True если домен валиден
-
-        Raises:
-            ValidationError: При невалидном домене
+            bool: True если домен валиден, False иначе
         """
         if not domain or len(domain) > 255:
-            raise ValidationError("Домен не может быть пустым или длиннее 255 символов")
+            return False
 
-        # Разрешаем wildcard в начале
-        if domain.startswith("*."):
-            domain = domain[2:]
+        # Проверяем общий формат
+        if not self.domain_pattern.match(domain):
+            return False
 
-        # Проверка общего формата
-        domain_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$'
-        if not re.match(domain_pattern, domain):
-            raise ValidationError("Некорректный формат домена")
+        # Обрабатываем wildcard
+        if domain.startswith('*.'):
+            domain = domain[2:]  # Убираем '*.'
 
-        # Проверка длины частей
+        # Разделяем на части
         parts = domain.split('.')
+
+        # Должно быть минимум 2 части (например, site.com)
+        if len(parts) < 2:
+            return False
+
+        # Валидируем каждую часть
         for part in parts:
-            if len(part) > 63:
-                raise ValidationError("Часть домена не может быть длиннее 63 символов")
+            if not self._validate_domain_part(part):
+                return False
 
         return True
 
-    @staticmethod
-    def validate_inn(inn: str) -> bool:
+    def _validate_domain_part(self, part: str) -> bool:
         """
-        Валидация ИНН с проверкой контрольной суммы
+        Валидация отдельной части домена.
 
         Args:
-            inn: ИНН для проверки
+            part: Часть домена для валидации
 
         Returns:
-            True если ИНН валиден
+            bool: True если часть валидна, False иначе
+        """
+        if not part or len(part) > 63:
+            return False
 
-        Raises:
-            ValidationError: При невалидном ИНН
+        # Не может начинаться или заканчиваться дефисом
+        if part.startswith('-') or part.endswith('-'):
+            return False
+
+        # Проверяем паттерн
+        return bool(self.domain_part_pattern.match(part))
+
+    def get_domain_examples(self) -> List[str]:
+        """Возвращает примеры валидных доменов."""
+        return [
+            "example.com",
+            "my-site.com",
+            "sub.example.com",
+            "sub-domain.my-site.com",
+            "*.example.com",
+            "*.sub.example.com",
+            "*.sub-domain.my-site.com"
+        ]
+
+
+class INNValidator:
+    """Валидатор ИНН с проверкой контрольной суммы."""
+
+    def validate(self, inn: str) -> bool:
+        """
+        Валидация ИНН с проверкой контрольной суммы.
+
+        Args:
+            inn: ИНН для валидации
+
+        Returns:
+            bool: True если ИНН валиден, False иначе
         """
         if not inn or not inn.isdigit():
-            raise ValidationError("ИНН должен содержать только цифры")
+            return False
 
-        if len(inn) not in [10, 12]:
-            raise ValidationError("ИНН должен содержать 10 или 12 цифр")
-
-        # Проверка контрольной суммы для 10-значного ИНН
         if len(inn) == 10:
-            check_digit = Validators._calculate_inn_10_check_digit(inn[:9])
-            if check_digit != int(inn[9]):
-                raise ValidationError("Неверная контрольная сумма ИНН")
-
-        # Проверка контрольной суммы для 12-значного ИНН
+            return self._validate_inn_10(inn)
         elif len(inn) == 12:
-            check_digit_11 = Validators._calculate_inn_12_check_digit_11(inn[:10])
-            check_digit_12 = Validators._calculate_inn_12_check_digit_12(inn[:11])
+            return self._validate_inn_12(inn)
 
-            if check_digit_11 != int(inn[10]) or check_digit_12 != int(inn[11]):
-                raise ValidationError("Неверная контрольная сумма ИНН")
+        return False
 
-        return True
-
-    @staticmethod
-    def _calculate_inn_10_check_digit(inn_9: str) -> int:
-        """Расчет контрольной суммы для 10-значного ИНН"""
+    def _validate_inn_10(self, inn: str) -> bool:
+        """Валидация 10-значного ИНН."""
         coefficients = [2, 4, 10, 3, 5, 9, 4, 6, 8]
-        sum_val = sum(int(inn_9[i]) * coefficients[i] for i in range(9))
-        return sum_val % 11 % 10
 
-    @staticmethod
-    def _calculate_inn_12_check_digit_11(inn_10: str) -> int:
-        """Расчет 11-й контрольной цифры для 12-значного ИНН"""
-        coefficients = [7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
-        sum_val = sum(int(inn_10[i]) * coefficients[i] for i in range(10))
-        return sum_val % 11 % 10
+        checksum = sum(int(inn[i]) * coefficients[i] for i in range(9))
+        control_digit = (checksum % 11) % 10
 
-    @staticmethod
-    def _calculate_inn_12_check_digit_12(inn_11: str) -> int:
-        """Расчет 12-й контрольной цифры для 12-значного ИНН"""
-        coefficients = [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
-        sum_val = sum(int(inn_11[i]) * coefficients[i] for i in range(11))
-        return sum_val % 11 % 10
+        return int(inn[9]) == control_digit
 
-    @staticmethod
-    def validate_period(period: str) -> Tuple[datetime, datetime]:
+    def _validate_inn_12(self, inn: str) -> bool:
+        """Валидация 12-значного ИНН."""
+        # Проверяем первую контрольную цифру
+        coefficients_1 = [7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
+        checksum_1 = sum(int(inn[i]) * coefficients_1[i] for i in range(10))
+        control_digit_1 = (checksum_1 % 11) % 10
+
+        if int(inn[10]) != control_digit_1:
+            return False
+
+        # Проверяем вторую контрольную цифру
+        coefficients_2 = [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
+        checksum_2 = sum(int(inn[i]) * coefficients_2[i] for i in range(11))
+        control_digit_2 = (checksum_2 % 11) % 10
+
+        return int(inn[11]) == control_digit_2
+
+
+class PeriodValidator:
+    """Валидатор периода действия сертификата."""
+
+    def validate(self, valid_from: date, valid_to: date) -> Tuple[bool, str]:
         """
-        Валидация периода действия сертификата
+        Валидация периода действия.
 
         Args:
-            period: Период в формате DD.MM.YYYY-DD.MM.YYYY
+            valid_from: Дата начала действия
+            valid_to: Дата окончания действия
 
         Returns:
-            Кортеж (начальная_дата, конечная_дата)
+            Tuple[bool, str]: (валиден ли период, сообщение об ошибке)
+        """
+        today = date.today()
+
+        # Проверяем, что даты не в прошлом
+        if valid_from < today:
+            return False, "Дата начала не может быть в прошлом"
+
+        # Проверяем, что дата окончания позже даты начала
+        if valid_to <= valid_from:
+            return False, "Дата окончания должна быть позже даты начала"
+
+        # Проверяем, что период не превышает 5 лет
+        years_diff = (valid_to - valid_from).days / 365.25
+        if years_diff > 5:
+            return False, "Период действия не может превышать 5 лет"
+
+        return True, ""
+
+    def parse_period_string(self, period: str) -> Tuple[date, date]:
+        """
+        Парсинг строки периода в формате DD.MM.YYYY-DD.MM.YYYY.
+
+        Args:
+            period: Строка периода
+
+        Returns:
+            Tuple[date, date]: Кортеж дат начала и окончания
 
         Raises:
-            ValidationError: При невалидном периоде
+            PeriodValidationError: При некорректном формате
         """
         try:
-            start_str, end_str = period.split('-')
-            start_date = datetime.strptime(start_str.strip(), '%d.%m.%Y')
-            end_date = datetime.strptime(end_str.strip(), '%d.%m.%Y')
-        except ValueError:
-            raise ValidationError("Неверный формат периода. Используйте DD.MM.YYYY-DD.MM.YYYY")
+            date_parts = period.split('-')
+            if len(date_parts) != 2:
+                raise PeriodValidationError("Неверный формат периода. Используйте DD.MM.YYYY-DD.MM.YYYY")
 
-        # Проверка логичности дат
-        if start_date >= end_date:
-            raise ValidationError("Начальная дата должна быть раньше конечной")
+            valid_from = datetime.strptime(date_parts[0].strip(), "%d.%m.%Y").date()
+            valid_to = datetime.strptime(date_parts[1].strip(), "%d.%m.%Y").date()
 
-        # Проверка, что даты не в прошлом
-        now = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        if start_date < now:
-            raise ValidationError("Начальная дата не может быть в прошлом")
+            return valid_from, valid_to
 
-        # Проверка максимального периода (5 лет)
-        max_period = timedelta(days=5*365)
-        if end_date - start_date > max_period:
-            raise ValidationError("Период действия не может превышать 5 лет")
+        except ValueError as e:
+            raise PeriodValidationError(f"Неверный формат даты: {e}")
 
-        return start_date, end_date
 
-    @staticmethod
-    def validate_users_count(users_count: int) -> bool:
+class UsersCountValidator:
+    """Валидатор количества пользователей."""
+
+    def validate(self, users_count: int) -> bool:
         """
-        Валидация количества пользователей
+        Валидация количества пользователей.
 
         Args:
             users_count: Количество пользователей
 
         Returns:
-            True если значение валидно
-
-        Raises:
-            ValidationError: При невалидном значении
+            bool: True если количество валидно, False иначе
         """
-        if not isinstance(users_count, int) or users_count < 1 or users_count > 1000:
-            raise ValidationError("Количество пользователей должно быть от 1 до 1000")
+        return isinstance(users_count, int) and 1 <= users_count <= 1000
 
-        return True
+
+class CertificateIDValidator:
+    """Валидатор ID сертификата."""
+
+    def __init__(self):
+        # Паттерн для валидации ID сертификата: XXXXX-XXXXX-XXXXX-XXXXX
+        self.pattern = re.compile(r'^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$')
+
+    def validate(self, certificate_id: str) -> bool:
+        """
+        Валидация ID сертификата.
+
+        Args:
+            certificate_id: ID сертификата для валидации
+
+        Returns:
+            bool: True если ID валиден, False иначе
+        """
+        if not certificate_id or len(certificate_id) != 23:
+            return False
+
+        return bool(self.pattern.match(certificate_id))
+
+    def validate_ending(self, certificate_id: str, expected_month: int, expected_year: int) -> bool:
+        """
+        Валидация окончания ID сертификата (месяц и год).
+
+        Args:
+            certificate_id: ID сертификата
+            expected_month: Ожидаемый месяц
+            expected_year: Ожидаемый год
+
+        Returns:
+            bool: True если окончание соответствует, False иначе
+        """
+        if not self.validate(certificate_id):
+            return False
+
+        # Извлекаем последние 4 символа
+        ending = certificate_id[-4:]
+
+        # Последние 2 цифры - месяц и год
+        try:
+            month_str = ending[2:4]  # Месяц
+            year_str = ending[4:6]   # Год (последние 2 цифры)
+
+            # Конвертируем в числа
+            month = int(month_str)
+            year = int(year_str)
+
+            # Проверяем соответствие
+            return month == expected_month and year == (expected_year % 100)
+
+        except (ValueError, IndexError):
+            return False
+
+
+class DataValidator:
+    """Общий валидатор для всех типов данных."""
+
+    def __init__(self):
+        self.domain_validator = DomainValidator()
+        self.inn_validator = INNValidator()
+        self.period_validator = PeriodValidator()
+        self.users_count_validator = UsersCountValidator()
+        self.certificate_id_validator = CertificateIDValidator()
+
+    def validate_all(self, domain: str, inn: str, valid_from: date,
+                     valid_to: date, users_count: int) -> List[str]:
+        """
+        Валидация всех данных сертификата.
+
+        Args:
+            domain: Доменное имя
+            inn: ИНН
+            valid_from: Дата начала действия
+            valid_to: Дата окончания действия
+            users_count: Количество пользователей
+
+        Returns:
+            List[str]: Список ошибок валидации (пустой если все в порядке)
+        """
+        errors = []
+
+        # Валидация домена
+        if not self.domain_validator.validate(domain):
+            errors.append(f"Некорректный домен: {domain}")
+
+        # Валидация ИНН
+        if not self.inn_validator.validate(inn):
+            errors.append(f"Некорректный ИНН: {inn}")
+
+        # Валидация периода
+        period_valid, period_error = self.period_validator.validate(valid_from, valid_to)
+        if not period_valid:
+            errors.append(period_error)
+
+        # Валидация количества пользователей
+        if not self.users_count_validator.validate(users_count):
+            errors.append(f"Некорректное количество пользователей: {users_count}")
+
+        return errors

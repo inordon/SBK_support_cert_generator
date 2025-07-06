@@ -1,139 +1,211 @@
 """
-Генератор сертификатов
+Генератор уникальных номеров сертификатов.
 """
+
 import random
 import string
-from datetime import datetime
-from typing import Optional
-
-from .models import Certificate
-from .validators import Validators
+from datetime import date
+from typing import Set
+from .exceptions import GenerationError
 
 
-class CertificateGenerator:
-    """Генератор сертификатов"""
-
-    # Символы для генерации
-    CHARS = string.ascii_uppercase + string.digits
+class CertificateIDGenerator:
+    """Генератор уникальных ID сертификатов."""
 
     def __init__(self):
-        self.validators = Validators()
+        # Символы для генерации ID (латинские буквы в верхнем регистре + цифры)
+        self.characters = string.ascii_uppercase + string.digits
+        self.max_attempts = 1000  # Максимальное количество попыток генерации уникального ID
 
-    def generate_certificate(
-            self,
-            domain: str,
-            inn: str,
-            period: str,
-            users_count: int,
-            created_by: Optional[int] = None
-    ) -> Certificate:
+    def generate(self, valid_to: date, existing_ids: Set[str] = None) -> str:
         """
-        Генерация нового сертификата
+        Генерирует уникальный ID сертификата.
 
-        Args:
-            domain: Доменное имя
-            inn: ИНН организации
-            period: Период действия в формате DD.MM.YYYY-DD.MM.YYYY
-            users_count: Количество пользователей
-            created_by: ID создателя
-
-        Returns:
-            Объект сертификата
-
-        Raises:
-            ValidationError: При невалидных входных данных
-        """
-        # Валидация входных данных
-        self.validators.validate_domain(domain)
-        self.validators.validate_inn(inn)
-        valid_from, valid_to = self.validators.validate_period(period)
-        self.validators.validate_users_count(users_count)
-
-        # Генерация ID сертификата
-        certificate_id = self._generate_certificate_id(valid_to)
-
-        # Создание объекта сертификата
-        certificate = Certificate(
-            certificate_id=certificate_id,
-            domain=domain,
-            inn=inn,
-            valid_from=valid_from,
-            valid_to=valid_to,
-            users_count=users_count,
-            created_at=datetime.now(),
-            created_by=created_by
-        )
-
-        return certificate
-
-    def _generate_certificate_id(self, valid_to: datetime) -> str:
-        """
-        Генерация уникального ID сертификата
+        Формат: XXXXX-XXXXX-XXXXX-XXXXX
+        Последние 4 символа содержат месяц и год окончания действия (MMYY)
 
         Args:
             valid_to: Дата окончания действия сертификата
+            existing_ids: Множество существующих ID для проверки уникальности
 
         Returns:
-            ID сертификата в формате XXXXX-XXXXX-XXXXX-XXXXX
+            str: Уникальный ID сертификата
+
+        Raises:
+            GenerationError: Если не удалось сгенерировать уникальный ID
         """
-        # Генерируем первые 3 блока (15 символов)
-        blocks = []
-        for _ in range(3):
-            block = ''.join(random.choices(self.CHARS, k=5))
-            blocks.append(block)
+        if existing_ids is None:
+            existing_ids = set()
 
-        # Последний блок: первый символ случайный + MMYY
-        month_year = valid_to.strftime("%m%y")
-        first_char = random.choice(self.CHARS)
-        last_block = first_char + month_year
-        blocks.append(last_block)
+        # Формируем окончание ID на основе даты окончания
+        month_year_suffix = self._format_month_year(valid_to)
 
-        return '-'.join(blocks)
+        # Пытаемся сгенерировать уникальный ID
+        for attempt in range(self.max_attempts):
+            certificate_id = self._generate_id_with_suffix(month_year_suffix)
 
-    def verify_certificate_id_format(self, certificate_id: str) -> bool:
+            # Проверяем уникальность
+            if certificate_id not in existing_ids:
+                return certificate_id
+
+        raise GenerationError(
+            f"Не удалось сгенерировать уникальный ID сертификата за {self.max_attempts} попыток"
+        )
+
+    def _format_month_year(self, valid_to: date) -> str:
         """
-        Проверка формата ID сертификата
+        Форматирует месяц и год в 4-символьную строку.
 
         Args:
-            certificate_id: ID сертификата для проверки
+            valid_to: Дата окончания действия
 
         Returns:
-            True если формат корректен
+            str: Строка формата MMYY
+        """
+        month = f"{valid_to.month:02d}"  # Месяц с ведущим нулем
+        year = f"{valid_to.year % 100:02d}"  # Последние 2 цифры года
+        return month + year
+
+    def _generate_id_with_suffix(self, suffix: str) -> str:
+        """
+        Генерирует ID с заданным суффиксом.
+
+        Args:
+            suffix: 4-символьный суффикс (MMYY)
+
+        Returns:
+            str: ID сертификата формата XXXXX-XXXXX-XXXXX-XXXXX
+        """
+        # Генерируем первые 3 блока (15 символов)
+        first_block = self._generate_block()
+        second_block = self._generate_block()
+        third_block = self._generate_block()
+
+        # Генерируем первые 2 символа последнего блока
+        last_block_prefix = ''.join(random.choices(self.characters, k=2))
+
+        # Формируем последний блок: 2 случайных символа + суффикс
+        last_block = last_block_prefix + suffix
+
+        # Собираем полный ID
+        return f"{first_block}-{second_block}-{third_block}-{last_block}"
+
+    def _generate_block(self) -> str:
+        """
+        Генерирует блок из 5 случайных символов.
+
+        Returns:
+            str: Блок из 5 символов
+        """
+        return ''.join(random.choices(self.characters, k=5))
+
+    def extract_expiry_date(self, certificate_id: str) -> tuple[int, int]:
+        """
+        Извлекает месяц и год окончания из ID сертификата.
+
+        Args:
+            certificate_id: ID сертификата
+
+        Returns:
+            tuple[int, int]: Кортеж (месяц, год)
+
+        Raises:
+            GenerationError: Если ID имеет неверный формат
+        """
+        if len(certificate_id) != 23 or certificate_id.count('-') != 3:
+            raise GenerationError(f"Неверный формат ID сертификата: {certificate_id}")
+
+        # Извлекаем последние 4 символа
+        suffix = certificate_id[-4:]
+
+        try:
+            month = int(suffix[:2])
+            year_short = int(suffix[2:])
+
+            # Конвертируем 2-значный год в 4-значный
+            # Предполагаем, что все годы относятся к 21 веку
+            current_year = date.today().year
+            if year_short <= (current_year % 100):
+                year = 2000 + year_short
+            else:
+                year = 1900 + year_short
+
+            # Проверяем корректность месяца
+            if not (1 <= month <= 12):
+                raise GenerationError(f"Некорректный месяц в ID сертификата: {month}")
+
+            return month, year
+
+        except ValueError as e:
+            raise GenerationError(f"Не удалось извлечь дату из ID сертификата: {e}")
+
+    def validate_id_format(self, certificate_id: str) -> bool:
+        """
+        Проверяет корректность формата ID сертификата.
+
+        Args:
+            certificate_id: ID для проверки
+
+        Returns:
+            bool: True если формат корректен, False иначе
         """
         if not certificate_id or len(certificate_id) != 23:
             return False
 
-        # Проверка формата XXXXX-XXXXX-XXXXX-XXXXX
+        # Проверяем формат XXXXX-XXXXX-XXXXX-XXXXX
         parts = certificate_id.split('-')
         if len(parts) != 4:
             return False
 
-        # Проверка длины каждой части
+        # Каждая часть должна содержать 5 символов
         for part in parts:
             if len(part) != 5:
                 return False
-            # Проверка символов
-            for char in part:
-                if char not in self.CHARS:
-                    return False
 
-        # Проверка последних 4 символов (MMYY)
-        last_part = parts[-1]
-        month_year = last_part[1:]  # Пропускаем первый символ
-
-        try:
-            month = int(month_year[:2])
-            year = int(month_year[2:])
-
-            # Проверка корректности месяца
-            if month < 1 or month > 12:
+            # Все символы должны быть из допустимого набора
+            if not all(c in self.characters for c in part):
                 return False
-
-            # Проверка корректности года (от 00 до 99)
-            if year < 0 or year > 99:
-                return False
-
-        except ValueError:
-            return False
 
         return True
+
+    def generate_examples(self, count: int = 5) -> list[str]:
+        """
+        Генерирует примеры ID сертификатов для демонстрации.
+
+        Args:
+            count: Количество примеров
+
+        Returns:
+            list[str]: Список примеров ID
+        """
+        examples = []
+        valid_to = date.today().replace(month=12, day=31)  # Конец текущего года
+
+        for _ in range(count):
+            example_id = self.generate(valid_to, set(examples))
+            examples.append(example_id)
+
+        return examples
+
+
+def main():
+    """Демонстрация работы генератора."""
+    generator = CertificateIDGenerator()
+
+    # Генерируем примеры
+    examples = generator.generate_examples(3)
+    print("Примеры сгенерированных ID сертификатов:")
+    for example in examples:
+        print(f"  {example}")
+
+    # Демонстрируем извлечение даты
+    for example in examples[:1]:
+        try:
+            month, year = generator.extract_expiry_date(example)
+            print(f"\nИз ID {example} извлечена дата окончания: {month:02d}.{year}")
+        except GenerationError as e:
+            print(f"Ошибка: {e}")
+
+
+if __name__ == "__main__":
+    main()

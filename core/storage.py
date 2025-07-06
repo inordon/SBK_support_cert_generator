@@ -1,298 +1,456 @@
 """
-Модуль для работы с хранилищем сертификатов
+Модуль для работы с файловым хранилищем сертификатов.
 """
+
 import json
 import os
-import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
-
-import asyncpg
-from asyncpg import Pool
-
-from .models import Certificate, CertificateHistory
+from typing import Optional, List, Dict
+from .models import Certificate
+from .exceptions import StorageError
+from config.settings import get_settings
 
 
-class StorageError(Exception):
-    """Исключение для ошибок хранилища"""
-    pass
+class FileStorage:
+    """Менеджер файлового хранилища сертификатов."""
 
-
-class DatabaseStorage:
-    """Класс для работы с PostgreSQL"""
-
-    def __init__(self, connection_string: str):
-        self.connection_string = connection_string
-        self.pool: Optional[Pool] = None
-
-    async def connect(self) -> None:
-        """Подключение к базе данных"""
-        try:
-            self.pool = await asyncpg.create_pool(
-                self.connection_string,
-                min_size=5,
-                max_size=20,
-                command_timeout=60
-            )
-        except Exception as e:
-            raise StorageError(f"Ошибка подключения к БД: {e}")
-
-    async def disconnect(self) -> None:
-        """Отключение от базы данных"""
-        if self.pool:
-            await self.pool.close()
-
-    async def save_certificate(self, certificate: Certificate) -> uuid.UUID:
+    def __init__(self, base_path: Path = None):
         """
-        Сохранение сертификата в БД
+        Инициализация файлового хранилища.
+
+        Args:
+            base_path: Базовый путь к директории сертификатов
+        """
+        if base_path is None:
+            settings = get_settings()
+            base_path = settings.certificates_path
+
+        self.base_path = Path(base_path)
+        self.base_path.mkdir(parents=True, exist_ok=True)
+
+    def save_certificate(self, certificate: Certificate) -> Path:
+        """
+        Сохраняет сертификат в JSON файл.
+
+        Структура: certificates/YYYY/domain_certificateID.json
 
         Args:
             certificate: Объект сертификата для сохранения
 
         Returns:
-            UUID сохраненного сертификата
+            Path: Путь к сохраненному файлу
 
         Raises:
-            StorageError: При ошибке сохранения
+            StorageError: При ошибке сохранения файла
         """
-        if not self.pool:
-            raise StorageError("Нет подключения к БД")
-
-        cert_uuid = uuid.uuid4()
-
         try:
-            async with self.pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    INSERT INTO certificates 
-                    (id, certificate_id, domain, inn, valid_from, valid_to, 
-                     users_count, created_at, created_by, is_active)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                    """,
-                    cert_uuid,
-                    certificate.certificate_id,
-                    certificate.domain,
-                    certificate.inn,
-                    certificate.valid_from,
-                    certificate.valid_to,
-                    certificate.users_count,
-                    certificate.created_at,
-                    certificate.created_by,
-                    certificate.is_active
-                )
+            # Определяем год создания
+            year = certificate.created_at.year
 
-                # Запись в историю
-                await self._log_history(
-                    conn,
-                    certificate.certificate_id,
-                    "CREATE",
-                    certificate.created_by,
-                    {"domain": certificate.domain, "inn": certificate.inn}
-                )
+            # Создаем директорию для года
+            year_dir = self.base_path / str(year)
+            year_dir.mkdir(parents=True, exist_ok=True)
 
-        except asyncpg.UniqueViolationError:
-            raise StorageError("Сертификат с таким ID уже существует")
+            # Формируем имя файла: domain_certificateID.json
+            filename = f"{certificate.domain}_{certificate.certificate_id}.json"
+            file_path = year_dir / filename
+
+            # Подготавливаем данные для сохранения
+            certificate_data = certificate.to_dict()
+
+            # Сохраняем в JSON файл
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(certificate_data, f, ensure_ascii=False, indent=2)
+
+            return file_path
+
         except Exception as e:
-            raise StorageError(f"Ошибка сохранения сертификата: {e}")
+            raise StorageError(f"Ошибка сохранения сертификата в файл: {e}")
 
-        return cert_uuid
-
-    async def get_certificate(self, certificate_id: str) -> Optional[Certificate]:
+    def load_certificate(self, certificate_id: str) -> Optional[Dict]:
         """
-        Получение сертификата по ID
+        Загружает сертификат из JSON файла по ID.
 
         Args:
             certificate_id: ID сертификата
 
         Returns:
-            Объект сертификата или None если не найден
+            Optional[Dict]: Данные сертификата или None если не найден
         """
-        if not self.pool:
-            raise StorageError("Нет подключения к БД")
-
         try:
-            async with self.pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    """
-                    SELECT id, certificate_id, domain, inn, valid_from, valid_to,
-                           users_count, created_at, created_by, is_active
-                    FROM certificates 
-                    WHERE certificate_id = $1
-                    """,
-                    certificate_id
-                )
+            # Ищем файл во всех годовых директориях
+            for year_dir in self.base_path.iterdir():
+                if year_dir.is_dir() and year_dir.name.isdigit():
+                    # Ищем файлы с нужным certificate_id
+                    for file_path in year_dir.glob(f"*_{certificate_id}.json"):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            return json.load(f)
 
-                if row:
-                    return Certificate(
-                        id=row['id'],
-                        certificate_id=row['certificate_id'],
-                        domain=row['domain'],
-                        inn=row['inn'],
-                        valid_from=row['valid_from'],
-                        valid_to=row['valid_to'],
-                        users_count=row['users_count'],
-                        created_at=row['created_at'],
-                        created_by=row['created_by'],
-                        is_active=row['is_active']
-                    )
-                return None
+            return None
 
         except Exception as e:
-            raise StorageError(f"Ошибка получения сертификата: {e}")
+            raise StorageError(f"Ошибка загрузки сертификата из файла: {e}")
 
-    async def find_certificates_by_domain(self, domain: str) -> List[Certificate]:
+    def find_certificates_by_domain(self, domain: str) -> List[Dict]:
         """
-        Поиск сертификатов по домену
+        Находит все сертификаты для указанного домена.
 
         Args:
             domain: Доменное имя
 
         Returns:
-            Список сертификатов
+            List[Dict]: Список найденных сертификатов
         """
-        if not self.pool:
-            raise StorageError("Нет подключения к БД")
+        certificates = []
 
         try:
-            async with self.pool.acquire() as conn:
-                rows = await conn.fetch(
-                    """
-                    SELECT id, certificate_id, domain, inn, valid_from, valid_to,
-                           users_count, created_at, created_by, is_active
-                    FROM certificates 
-                    WHERE domain = $1 AND is_active = true
-                    ORDER BY created_at DESC
-                    """,
-                    domain
-                )
+            # Ищем во всех годовых директориях
+            for year_dir in self.base_path.iterdir():
+                if year_dir.is_dir() and year_dir.name.isdigit():
+                    # Ищем файлы с нужным доменом
+                    for file_path in year_dir.glob(f"{domain}_*.json"):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            certificate_data = json.load(f)
+                            certificates.append(certificate_data)
 
-                certificates = []
-                for row in rows:
-                    certificates.append(Certificate(
-                        id=row['id'],
-                        certificate_id=row['certificate_id'],
-                        domain=row['domain'],
-                        inn=row['inn'],
-                        valid_from=row['valid_from'],
-                        valid_to=row['valid_to'],
-                        users_count=row['users_count'],
-                        created_at=row['created_at'],
-                        created_by=row['created_by'],
-                        is_active=row['is_active']
-                    ))
-
-                return certificates
+            return certificates
 
         except Exception as e:
-            raise StorageError(f"Ошибка поиска сертификатов: {e}")
+            raise StorageError(f"Ошибка поиска сертификатов по домену: {e}")
 
-    async def _log_history(
-            self,
-            conn,
-            certificate_id: str,
-            action: str,
-            performed_by: Optional[int],
-            details: dict
-    ) -> None:
-        """Запись действия в историю"""
-        await conn.execute(
-            """
-            INSERT INTO certificate_history 
-            (id, certificate_id, action, performed_at, performed_by, details)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            """,
-            uuid.uuid4(),
-            certificate_id,
-            action,
-            datetime.now(),
-            performed_by,
-            json.dumps(details)
-        )
-
-
-class FileStorage:
-    """Класс для работы с файловым хранилищем"""
-
-    def __init__(self, base_path: str = "certificates"):
-        self.base_path = Path(base_path)
-        self.base_path.mkdir(exist_ok=True)
-
-    def save_certificate(self, certificate: Certificate) -> Path:
+    def get_all_certificates(self) -> List[Dict]:
         """
-        Сохранение сертификата в файл
+        Получает все сертификаты из файлового хранилища.
+
+        Returns:
+            List[Dict]: Список всех сертификатов
+        """
+        certificates = []
+
+        try:
+            # Проходим по всем годовым директориям
+            for year_dir in self.base_path.iterdir():
+                if year_dir.is_dir() and year_dir.name.isdigit():
+                    # Читаем все JSON файлы
+                    for file_path in year_dir.glob("*.json"):
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                certificate_data = json.load(f)
+                                certificates.append(certificate_data)
+                        except Exception as e:
+                            print(f"Ошибка чтения файла {file_path}: {e}")
+                            continue
+
+            return certificates
+
+        except Exception as e:
+            raise StorageError(f"Ошибка получения всех сертификатов: {e}")
+
+    def delete_certificate(self, certificate_id: str, domain: str = None) -> bool:
+        """
+        Удаляет файл сертификата.
+
+        Args:
+            certificate_id: ID сертификата
+            domain: Доменное имя (для ускорения поиска)
+
+        Returns:
+            bool: True если файл удален, False если не найден
+        """
+        try:
+            # Если известен домен, ищем более эффективно
+            if domain:
+                for year_dir in self.base_path.iterdir():
+                    if year_dir.is_dir() and year_dir.name.isdigit():
+                        file_path = year_dir / f"{domain}_{certificate_id}.json"
+                        if file_path.exists():
+                            file_path.unlink()
+                            return True
+            else:
+                # Ищем во всех директориях
+                for year_dir in self.base_path.iterdir():
+                    if year_dir.is_dir() and year_dir.name.isdigit():
+                        for file_path in year_dir.glob(f"*_{certificate_id}.json"):
+                            file_path.unlink()
+                            return True
+
+            return False
+
+        except Exception as e:
+            raise StorageError(f"Ошибка удаления сертификата: {e}")
+
+    def backup_certificates(self, backup_path: Path = None) -> Path:
+        """
+        Создает резервную копию всех сертификатов.
+
+        Args:
+            backup_path: Путь для сохранения бэкапа
+
+        Returns:
+            Path: Путь к файлу резервной копии
+        """
+        if backup_path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = self.base_path.parent / f"certificates_backup_{timestamp}.json"
+
+        try:
+            all_certificates = self.get_all_certificates()
+
+            backup_data = {
+                "created_at": datetime.now().isoformat(),
+                "total_certificates": len(all_certificates),
+                "certificates": all_certificates
+            }
+
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, ensure_ascii=False, indent=2)
+
+            return backup_path
+
+        except Exception as e:
+            raise StorageError(f"Ошибка создания резервной копии: {e}")
+
+    def restore_from_backup(self, backup_path: Path) -> int:
+        """
+        Восстанавливает сертификаты из резервной копии.
+
+        Args:
+            backup_path: Путь к файлу резервной копии
+
+        Returns:
+            int: Количество восстановленных сертификатов
+        """
+        try:
+            with open(backup_path, 'r', encoding='utf-8') as f:
+                backup_data = json.load(f)
+
+            certificates = backup_data.get('certificates', [])
+            restored_count = 0
+
+            for cert_data in certificates:
+                try:
+                    # Создаем объект Certificate для сохранения
+                    # Преобразуем строковые даты обратно в объекты datetime/date
+                    cert_data_copy = cert_data.copy()
+
+                    # Определяем год из created_at
+                    created_at = datetime.fromisoformat(cert_data['created_at'])
+                    year = created_at.year
+
+                    # Создаем директорию для года
+                    year_dir = self.base_path / str(year)
+                    year_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Формируем путь к файлу
+                    filename = f"{cert_data['domain']}_{cert_data['certificate_id']}.json"
+                    file_path = year_dir / filename
+
+                    # Сохраняем файл
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(cert_data, f, ensure_ascii=False, indent=2)
+
+                    restored_count += 1
+
+                except Exception as e:
+                    print(f"Ошибка восстановления сертификата {cert_data.get('certificate_id', 'unknown')}: {e}")
+                    continue
+
+            return restored_count
+
+        except Exception as e:
+            raise StorageError(f"Ошибка восстановления из резервной копии: {e}")
+
+    def cleanup_old_files(self, days_old: int = 365) -> int:
+        """
+        Удаляет старые файлы сертификатов.
+
+        Args:
+            days_old: Возраст файлов в днях для удаления
+
+        Returns:
+            int: Количество удаленных файлов
+        """
+        try:
+            from datetime import timedelta
+
+            cutoff_date = datetime.now() - timedelta(days=days_old)
+            deleted_count = 0
+
+            for year_dir in self.base_path.iterdir():
+                if year_dir.is_dir() and year_dir.name.isdigit():
+                    for file_path in year_dir.glob("*.json"):
+                        # Проверяем время модификации файла
+                        file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+
+                        if file_mtime < cutoff_date:
+                            try:
+                                file_path.unlink()
+                                deleted_count += 1
+                            except Exception as e:
+                                print(f"Ошибка удаления файла {file_path}: {e}")
+
+            return deleted_count
+
+        except Exception as e:
+            raise StorageError(f"Ошибка очистки старых файлов: {e}")
+
+    def get_storage_stats(self) -> Dict:
+        """
+        Получает статистику файлового хранилища.
+
+        Returns:
+            Dict: Статистика хранилища
+        """
+        try:
+            total_files = 0
+            total_size = 0
+            years = []
+
+            for year_dir in self.base_path.iterdir():
+                if year_dir.is_dir() and year_dir.name.isdigit():
+                    years.append(year_dir.name)
+                    year_files = 0
+
+                    for file_path in year_dir.glob("*.json"):
+                        total_files += 1
+                        year_files += 1
+                        total_size += file_path.stat().st_size
+
+            return {
+                "total_files": total_files,
+                "total_size_bytes": total_size,
+                "total_size_mb": round(total_size / 1024 / 1024, 2),
+                "years_covered": sorted(years),
+                "base_path": str(self.base_path)
+            }
+
+        except Exception as e:
+            raise StorageError(f"Ошибка получения статистики хранилища: {e}")
+
+
+class CertificateStorageManager:
+    """Менеджер для координации работы с БД и файловым хранилищем."""
+
+    def __init__(self, file_storage: FileStorage = None):
+        """
+        Инициализация менеджера хранилища.
+
+        Args:
+            file_storage: Экземпляр файлового хранилища
+        """
+        if file_storage is None:
+            file_storage = FileStorage()
+
+        self.file_storage = file_storage
+
+    def save_certificate_complete(self, certificate: Certificate) -> Dict:
+        """
+        Полное сохранение сертификата (БД + файл).
 
         Args:
             certificate: Объект сертификата
 
         Returns:
-            Путь к сохраненному файлу
+            Dict: Результат операции
         """
-        # Создание структуры папок: YYYY/MM/
-        year = certificate.created_at.year
-        month = certificate.created_at.month
+        result = {
+            "database_saved": False,
+            "file_saved": False,
+            "file_path": None,
+            "errors": []
+        }
 
-        dir_path = self.base_path / str(year) / f"{month:02d}"
-        dir_path.mkdir(parents=True, exist_ok=True)
-
-        # Имя файла: domain_certificateID.json
-        filename = f"{certificate.domain}_{certificate.certificate_id}.json"
-        file_path = dir_path / filename
-
-        # Сохранение JSON
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(certificate.to_dict(), f, ensure_ascii=False, indent=2)
-
-            # Установка прав доступа
-            os.chmod(file_path, 0o644)
-
-            return file_path
+            # Сохраняем в файловое хранилище
+            file_path = self.file_storage.save_certificate(certificate)
+            result["file_saved"] = True
+            result["file_path"] = str(file_path)
 
         except Exception as e:
-            raise StorageError(f"Ошибка сохранения файла: {e}")
+            result["errors"].append(f"Ошибка сохранения в файл: {e}")
 
-    def load_certificate(self, certificate_id: str) -> Optional[Certificate]:
+        return result
+
+    def load_certificate_complete(self, certificate_id: str) -> Optional[Dict]:
         """
-        Загрузка сертификата из файла
+        Загружает сертификат из файлового хранилища.
 
         Args:
             certificate_id: ID сертификата
 
         Returns:
-            Объект сертификата или None если не найден
+            Optional[Dict]: Данные сертификата или None
         """
-        # Поиск файла по всей структуре
-        for year_dir in self.base_path.iterdir():
-            if not year_dir.is_dir():
-                continue
+        try:
+            return self.file_storage.load_certificate(certificate_id)
+        except Exception as e:
+            print(f"Ошибка загрузки сертификата {certificate_id}: {e}")
+            return None
 
-            for month_dir in year_dir.iterdir():
-                if not month_dir.is_dir():
-                    continue
+    def sync_database_to_files(self) -> Dict:
+        """
+        Синхронизирует данные из БД в файловое хранилище.
 
-                for file_path in month_dir.glob(f"*_{certificate_id}.json"):
+        Returns:
+            Dict: Результат синхронизации
+        """
+        from .database import get_certificate_repo
+
+        repo = get_certificate_repo()
+        result = {
+            "synced_count": 0,
+            "errors": [],
+            "total_certificates": 0
+        }
+
+        try:
+            # Получаем все сертификаты из БД
+            with repo.db_manager.get_session() as session:
+                certificates = session.query(repo.db_manager.Certificate).all()
+                result["total_certificates"] = len(certificates)
+
+                for certificate in certificates:
                     try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
+                        self.file_storage.save_certificate(certificate)
+                        result["synced_count"] += 1
+                    except Exception as e:
+                        result["errors"].append(f"Ошибка синхронизации {certificate.certificate_id}: {e}")
 
-                        # Парсинг периода действия
-                        period_parts = data['validity_period'].split('-')
-                        valid_from = datetime.strptime(period_parts[0], '%d.%m.%Y')
-                        valid_to = datetime.strptime(period_parts[1], '%d.%m.%Y')
+        except Exception as e:
+            result["errors"].append(f"Ошибка получения данных из БД: {e}")
 
-                        return Certificate(
-                            certificate_id=data['certificate_id'],
-                            domain=data['domain'],
-                            inn=data['inn'],
-                            valid_from=valid_from,
-                            valid_to=valid_to,
-                            users_count=data['users_count'],
-                            created_at=datetime.fromisoformat(data['created_at']),
-                            created_by=data.get('created_by')
-                        )
+        return result
 
-                    except Exception:
-                        continue
 
-        return None
+# Глобальный экземпляр файлового хранилища
+file_storage = FileStorage()
+storage_manager = CertificateStorageManager(file_storage)
+
+
+def get_file_storage() -> FileStorage:
+    """Возвращает экземпляр файлового хранилища."""
+    return file_storage
+
+
+def get_storage_manager() -> CertificateStorageManager:
+    """Возвращает менеджер хранилища."""
+    return storage_manager
+
+
+if __name__ == "__main__":
+    # Тестирование файлового хранилища
+    storage = FileStorage()
+
+    # Получаем статистику
+    stats = storage.get_storage_stats()
+    print("Статистика файлового хранилища:")
+    for key, value in stats.items():
+        print(f"  {key}: {value}")
+
+    # Создаем резервную копию
+    try:
+        backup_path = storage.backup_certificates()
+        print(f"\nРезервная копия создана: {backup_path}")
+    except StorageError as e:
+        print(f"Ошибка создания резервной копии: {e}")

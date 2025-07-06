@@ -1,124 +1,151 @@
 version: '3.8'
 
 services:
-  # PostgreSQL база данных
+  # База данных PostgreSQL
   postgres:
     image: postgres:15-alpine
+    container_name: certificates_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: certificates_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      CERT_APP_PASSWORD: ${CERT_APP_PASSWORD}
-      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_DB: ${DB_NAME:-certificates_db}
+      POSTGRES_USER: ${DB_USER:-certificates_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=ru_RU.UTF-8 --lc-ctype=ru_RU.UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./database/02-create-user.sh:/docker-entrypoint-initdb.d/02-create-user.sh:ro
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "5432:5432"
     networks:
-      - cert_network
+      - certificates_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d certificates_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-certificates_user} -d ${DB_NAME:-certificates_db}"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
-
-  # Redis для хранения состояний FSM
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    networks:
-      - cert_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # API сервис
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
-      target: production
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://cert_app:${CERT_APP_PASSWORD}@postgres:5432/certificates_db
-      API_KEY: ${API_KEY}
-      CERTIFICATES_DIR: /app/certificates
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      PYTHONUNBUFFERED: 1
-    volumes:
-      - certificates_data:/app/certificates:rw
-      - api_logs:/app/logs:rw
-    ports:
-      - "${API_PORT:-8000}:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - cert_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
   # Telegram бот
-  bot:
+  certificate_bot:
     build:
       context: .
-      dockerfile: Dockerfile.bot
-      target: production
+      dockerfile: Dockerfile
+    container_name: certificate_bot
     restart: unless-stopped
     environment:
+      # Telegram
       BOT_TOKEN: ${BOT_TOKEN}
-      DATABASE_URL: postgresql://cert_app:${CERT_APP_PASSWORD}@postgres:5432/certificates_db
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      ALLOWED_USERS: ${ALLOWED_USERS}
+      ADMIN_USERS: ${ADMIN_USERS}
       VERIFY_USERS: ${VERIFY_USERS}
-      NOTIFICATION_CHAT: ${NOTIFICATION_CHAT}
-      CERTIFICATES_DIR: /app/certificates
+      NOTIFICATION_GROUP: ${NOTIFICATION_GROUP}
+
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-certificates_db}
+      DB_USER: ${DB_USER:-certificates_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Storage
+      CERTIFICATES_PATH: /app/certificates
+      LOG_FILE: /app/logs/bot.log
+
+      # App settings
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      PYTHONUNBUFFERED: 1
+      DEBUG: ${DEBUG:-false}
+      TIMEZONE: ${TIMEZONE:-Europe/Moscow}
     volumes:
-      - certificates_data:/app/certificates:rw
-      - bot_logs:/app/logs:rw
+      - certificates_data:/app/certificates
+      - logs_data:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     networks:
-      - cert_network
+      - certificates_network
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('https://api.telegram.org/bot${BOT_TOKEN}/getMe')"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('https://api.telegram.org/bot${BOT_TOKEN}/getMe').raise_for_status()"]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Веб-интерфейс для мониторинга (опционально)
+  adminer:
+    image: adminer:4.8.1
+    container_name: certificates_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    networks:
+      - certificates_network
+    profiles:
+      - admin
+    depends_on:
+      - postgres
+
+  # Backup сервис (опционально)
+  backup:
+    image: postgres:15-alpine
+    container_name: certificates_backup
+    restart: "no"
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:ro
+      - ./backups:/backups
+    networks:
+      - certificates_network
+    profiles:
+      - backup
+    command: >
+      sh -c "
+        echo 'Creating backup...' &&
+        pg_dump -h postgres -U ${DB_USER:-certificates_user} -d ${DB_NAME:-certificates_db} > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql &&
+        echo 'Backup completed successfully!'
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
     driver: local
-  redis_data:
-    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
+
   certificates_data:
     driver: local
-  api_logs:
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/certificates
+
+  logs_data:
     driver: local
-  bot_logs:
-    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/logs
 
 networks:
-  cert_network:
+  certificates_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
