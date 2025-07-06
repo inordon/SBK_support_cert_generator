@@ -377,7 +377,7 @@ class CertificateHandlers:
 
         # Обработчик проверки сертификата (только для пользователей с правами проверки)
         @self.router.message(F.text.regexp(r'^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$'))
-                                           async def verify_certificate_handler(message: Message):
+        async def verify_certificate_handler(message: Message):
             """Обработчик проверки сертификата по ID"""
             if not self._check_permissions(message.from_user.id, "verify"):
                 await message.answer("❌ У вас нет прав для проверки сертификатов.")

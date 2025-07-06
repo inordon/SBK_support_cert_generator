@@ -50,7 +50,6 @@ CREATE TABLE certificate_history (
 );
 
 -- Индексы для оптимизации запросов
--- Основные индексы
 CREATE INDEX idx_certificates_certificate_id ON certificates(certificate_id);
 CREATE INDEX idx_certificates_domain ON certificates(domain);
 CREATE INDEX idx_certificates_inn ON certificates(inn);
@@ -58,22 +57,14 @@ CREATE INDEX idx_certificates_created_at ON certificates(created_at);
 CREATE INDEX idx_certificates_valid_from ON certificates(valid_from);
 CREATE INDEX idx_certificates_valid_to ON certificates(valid_to);
 CREATE INDEX idx_certificates_is_active ON certificates(is_active);
-
--- Составные индексы
 CREATE INDEX idx_certificates_domain_active ON certificates(domain, is_active);
 CREATE INDEX idx_certificates_active_valid ON certificates(is_active, valid_from, valid_to);
 CREATE INDEX idx_certificates_created_by_date ON certificates(created_by, created_at);
-
--- Индексы для истории
 CREATE INDEX idx_certificate_history_cert_id ON certificate_history(certificate_id);
 CREATE INDEX idx_certificate_history_action ON certificate_history(action);
 CREATE INDEX idx_certificate_history_performed_at ON certificate_history(performed_at);
 CREATE INDEX idx_certificate_history_performed_by ON certificate_history(performed_by);
-
--- GIN индекс для JSONB поля details
 CREATE INDEX idx_certificate_history_details ON certificate_history USING gin(details);
-
--- Индекс для полнотекстового поиска по домену
 CREATE INDEX idx_certificates_domain_trgm ON certificates USING gin(domain gin_trgm_ops);
 
 -- Функция для автоматического логирования изменений
@@ -137,7 +128,6 @@ deleted_count INTEGER;
 BEGIN
 DELETE FROM certificate_history
 WHERE performed_at < NOW() - INTERVAL '1 day' * retention_days;
-
 GET DIAGNOSTICS deleted_count = ROW_COUNT;
 RETURN deleted_count;
 END;
@@ -177,7 +167,7 @@ FROM certificates;
 END;
 $$ LANGUAGE plpgsql;
 
--- Представление для активных сертификатов
+-- Представления
 CREATE VIEW active_certificates AS
 SELECT
     c.*,
@@ -190,7 +180,6 @@ SELECT
 FROM certificates c
 WHERE c.is_active = TRUE;
 
--- Представление для сертификатов с историей
 CREATE VIEW certificates_with_history AS
 SELECT
     c.*,
@@ -208,21 +197,10 @@ SELECT
     ) as history
 FROM certificates c;
 
--- Создание пользователя для приложения
-CREATE ROLE cert_app WITH LOGIN;
-
--- Предоставление прав
-GRANT USAGE ON SCHEMA certificates TO cert_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON certificates TO cert_app;
-GRANT SELECT, INSERT ON certificate_history TO cert_app;
-GRANT SELECT ON active_certificates TO cert_app;
-GRANT SELECT ON certificates_with_history TO cert_app;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA certificates TO cert_app;
-
 -- Комментарии к таблицам и столбцам
 COMMENT ON TABLE certificates IS 'Основная таблица сертификатов';
 COMMENT ON COLUMN certificates.certificate_id IS 'Уникальный ID сертификата в формате XXXXX-XXXXX-XXXXX-XXXXX';
-COMMENT ON COLUMN certificates.domain IS 'Доменное имя, поддерживает wildcard (*. example.com)';
+COMMENT ON COLUMN certificates.domain IS 'Доменное имя, поддерживает wildcard (*.example.com)';
 COMMENT ON COLUMN certificates.inn IS 'ИНН организации (10 или 12 цифр)';
 COMMENT ON COLUMN certificates.valid_from IS 'Дата начала действия сертификата';
 COMMENT ON COLUMN certificates.valid_to IS 'Дата окончания действия сертификата';
