@@ -7,7 +7,7 @@ from datetime import datetime, date
 from typing import Optional, List
 from sqlalchemy import (
     create_engine, Column, String, Integer, DateTime, Date,
-    Boolean, Text, Index, UniqueConstraint
+    Boolean, Text, Index, UniqueConstraint, text
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -147,7 +147,7 @@ class DatabaseManager:
         """Проверяет подключение к базе данных."""
         try:
             with self.get_session() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
                 return True
         except Exception as e:
             print(f"Ошибка подключения к БД: {e}")

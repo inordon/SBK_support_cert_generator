@@ -355,8 +355,8 @@ async def process_confirmation(message: Message, state: FSMContext):
                 f"👤 Создатель: {message.from_user.full_name} ({message.from_user.id})"
             )
 
-            from aiogram import Bot
-            bot = Bot.get_current()
+            # Получаем бота из контекста
+            bot = message.bot
             await bot.send_message(
                 chat_id=settings.notification_group,
                 text=notification_text,

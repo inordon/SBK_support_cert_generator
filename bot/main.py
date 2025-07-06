@@ -149,20 +149,20 @@ async def on_startup():
     logger.info("Инициализация завершена успешно")
 
 
-async def on_shutdown():
+async def on_shutdown(bot: Bot = None):
     """Действия при завершении работы бота."""
     logger.info("Завершение работы бота...")
 
     # Отправляем уведомление о завершении работы
-    try:
-        settings = get_settings()
-        bot = Bot.get_current()
-        await bot.send_message(
-            chat_id=settings.notification_group,
-            text="🔴 Бот остановлен"
-        )
-    except Exception as e:
-        logger.warning(f"Не удалось отправить уведомление об остановке: {e}")
+    if bot:
+        try:
+            settings = get_settings()
+            await bot.send_message(
+                chat_id=settings.notification_group,
+                text="🔴 Бот остановлен"
+            )
+        except Exception as e:
+            logger.warning(f"Не удалось отправить уведомление об остановке: {e}")
 
     logger.info("Бот завершил работу")
 
@@ -190,7 +190,7 @@ async def main():
 
         # Регистрируем функции lifecycle
         dp.startup.register(on_startup)
-        dp.shutdown.register(on_shutdown)
+        dp.shutdown.register(lambda: on_shutdown(bot))
 
         logger.info("Бот готов к работе. Начинаем polling...")
 
