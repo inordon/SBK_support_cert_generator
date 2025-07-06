@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, env="DEBUG", description="Режим отладки")
     timezone: str = Field(default="Europe/Moscow", env="TIMEZONE", description="Часовой пояс")
 
+    # Настройки резервного копирования (опционально)
+    backup_enabled: bool = Field(default=False, env="BACKUP_ENABLED", description="Включить резервное копирование")
+    backup_schedule: str = Field(default="0 2 * * *", env="BACKUP_SCHEDULE", description="Расписание резервного копирования")
+    max_backup_files: int = Field(default=30, env="MAX_BACKUP_FILES", description="Максимальное количество файлов бэкапа")
+
     @property
     def database_url(self) -> str:
         """Возвращает URL подключения к базе данных."""
@@ -124,6 +129,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"  # Игнорировать дополнительные поля из .env
 
 
 # Глобальная переменная с настройками
