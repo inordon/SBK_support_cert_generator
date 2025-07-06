@@ -146,9 +146,10 @@ class DatabaseManager:
     def health_check(self) -> bool:
         """Проверяет подключение к базе данных."""
         try:
-            with self.get_session() as session:
-                session.execute(text("SELECT 1"))
-                return True
+            # Простая проверка подключения без выполнения SQL
+            connection = self.engine.connect()
+            connection.close()
+            return True
         except Exception as e:
             print(f"Ошибка подключения к БД: {e}")
             return False
