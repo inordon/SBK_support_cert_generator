@@ -32,7 +32,7 @@ CREATE TABLE certificates (
     CONSTRAINT chk_valid_period
         CHECK (valid_from < valid_to),
     CONSTRAINT chk_max_period
-        CHECK ((valid_to - valid_from) <= INTERVAL '5 years')
+        CHECK (valid_to - valid_from <= 365 * 5)
 );
 
 -- Таблица истории действий с сертификатами
