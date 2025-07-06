@@ -1,10 +1,11 @@
 """
-Основной файл для запуска Telegram бота.
+Основной файл для запуска Telegram бота - исправленная версия.
 """
 
 import asyncio
 import logging
 import sys
+import os
 from pathlib import Path
 
 # Добавляем корневую директорию в путь для импортов
@@ -20,17 +21,45 @@ from core.database import get_db_manager
 from .middleware import setup_middlewares
 from .handlers import common, admin, verify
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/bot.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+# Функция для безопасной настройки логирования
+def setup_logging():
+    """Настройка логирования с проверкой прав доступа."""
+    settings = get_settings()
 
-logger = logging.getLogger(__name__)
+    # Список обработчиков для логирования
+    handlers = []
+
+    # Всегда добавляем консольный вывод
+    handlers.append(logging.StreamHandler(sys.stdout))
+
+    # Пробуем добавить файловый обработчик
+    try:
+        # Создаем директорию для логов если её нет
+        log_file = Path(settings.log_file)
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Проверяем права на запись
+        if log_file.parent.exists() and os.access(log_file.parent, os.W_OK):
+            handlers.append(logging.FileHandler(settings.log_file, encoding='utf-8'))
+            print(f"✅ Логирование в файл: {settings.log_file}")
+        else:
+            print(f"⚠️  Нет прав на запись в {log_file.parent}, используем только консоль")
+
+    except Exception as e:
+        print(f"⚠️  Ошибка настройки файлового логирования: {e}")
+        print("📋 Используем только консольное логирование")
+
+    # Настраиваем логирование
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=handlers
+    )
+
+    return logging.getLogger(__name__)
+
+# Настраиваем логирование
+logger = setup_logging()
 
 
 async def create_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
@@ -109,14 +138,17 @@ async def check_bot_permissions(bot: Bot):
 
         # Проверяем возможность отправки сообщений в группу уведомлений
         settings = get_settings()
-        try:
-            await bot.send_message(
-                chat_id=settings.notification_group,
-                text="🤖 Бот запущен и готов к работе!"
-            )
-            logger.info("Уведомление о запуске отправлено в группу")
-        except Exception as e:
-            logger.warning(f"Не удалось отправить уведомление в группу: {e}")
+        if settings.notification_group and settings.notification_group != 0:
+            try:
+                await bot.send_message(
+                    chat_id=settings.notification_group,
+                    text="🤖 Бот запущен и готов к работе!"
+                )
+                logger.info("Уведомление о запуске отправлено в группу")
+            except Exception as e:
+                logger.warning(f"Не удалось отправить уведомление в группу: {e}")
+        else:
+            logger.info("Группа уведомлений не настроена")
 
     except Exception as e:
         logger.error(f"Ошибка проверки прав бота: {e}")
@@ -157,10 +189,11 @@ async def on_shutdown(bot: Bot = None):
     if bot:
         try:
             settings = get_settings()
-            await bot.send_message(
-                chat_id=settings.notification_group,
-                text="🔴 Бот остановлен"
-            )
+            if settings.notification_group and settings.notification_group != 0:
+                await bot.send_message(
+                    chat_id=settings.notification_group,
+                    text="🔴 Бот остановлен"
+                )
         except Exception as e:
             logger.warning(f"Не удалось отправить уведомление об остановке: {e}")
 

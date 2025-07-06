@@ -134,9 +134,21 @@ class Settings(BaseSettings):
             # Проверяем права доступа
             if not os.access(self.certificates_path, os.W_OK):
                 print(f"⚠️  Нет прав записи в {self.certificates_path}")
+                # Пробуем изменить права
+                try:
+                    os.chmod(self.certificates_path, 0o755)
+                    print(f"✅ Права на {self.certificates_path} исправлены")
+                except Exception as e:
+                    print(f"❌ Не удалось исправить права: {e}")
 
             if not os.access(self.log_file.parent, os.W_OK):
                 print(f"⚠️  Нет прав записи в {self.log_file.parent}")
+                # Пробуем изменить права
+                try:
+                    os.chmod(self.log_file.parent, 0o755)
+                    print(f"✅ Права на {self.log_file.parent} исправлены")
+                except Exception as e:
+                    print(f"❌ Не удалось исправить права: {e}")
 
         except Exception as e:
             print(f"❌ Ошибка создания директорий: {e}")

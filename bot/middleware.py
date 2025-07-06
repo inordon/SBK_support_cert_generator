@@ -1,5 +1,5 @@
 """
-Middleware для проверки прав доступа пользователей.
+Middleware для проверки прав доступа пользователей - исправленная версия.
 """
 
 import logging
@@ -37,28 +37,36 @@ class AccessMiddleware(BaseMiddleware):
             Any: Результат выполнения обработчика или None при отказе в доступе
         """
         user_id = None
+        chat_type = None
 
-        # Получаем user_id из разных типов событий
+        # Получаем user_id и тип чата из разных типов событий
         if isinstance(event, Message):
             user_id = event.from_user.id if event.from_user else None
+            chat_type = event.chat.type if event.chat else None
         elif isinstance(event, CallbackQuery):
             user_id = event.from_user.id if event.from_user else None
+            chat_type = event.message.chat.type if event.message and event.message.chat else None
 
         # Если не удалось получить user_id, разрешаем доступ
         # (возможно, это служебное сообщение)
         if user_id is None:
             return await handler(event, data)
 
-        # Проверяем права доступа
+        # Проверяем тип чата - в группах бот не отвечает на команды
+        if chat_type in ['group', 'supergroup']:
+            # В группах бот молчит, только слушает для уведомлений
+            logger.debug(f"Сообщение в группе {chat_type} от пользователя {user_id} - игнорируем")
+            return None
+
+        # Только в личных сообщениях проверяем права доступа
         if not self.settings.is_allowed_user(user_id):
             logger.warning(f"Попытка несанкционированного доступа от пользователя {user_id}")
 
-            # Отправляем сообщение о запрете доступа
-            if isinstance(event, Message):
+            # Отправляем сообщение о запрете доступа только в личных сообщениях
+            if isinstance(event, Message) and chat_type == 'private':
                 await event.answer(
                     "❌ У вас нет доступа к этому боту.\n\n"
-                    "Обратитесь к администратору для получения прав доступа.",
-                    show_alert=True
+                    "Обратитесь к администратору для получения прав доступа."
                 )
             elif isinstance(event, CallbackQuery):
                 await event.answer(
@@ -72,10 +80,11 @@ class AccessMiddleware(BaseMiddleware):
         data['user_permissions'] = {
             'is_admin': self.settings.is_admin(user_id),
             'can_verify': self.settings.is_verify_user(user_id),
-            'user_id': user_id
+            'user_id': user_id,
+            'chat_type': chat_type
         }
 
-        logger.debug(f"Пользователь {user_id} получил доступ. Права: {data['user_permissions']}")
+        logger.debug(f"Пользователь {user_id} получил доступ в {chat_type}. Права: {data['user_permissions']}")
 
         # Выполняем основной обработчик
         return await handler(event, data)
@@ -107,22 +116,29 @@ class AdminRequiredMiddleware(BaseMiddleware):
             Any: Результат выполнения обработчика или None при отказе в доступе
         """
         user_id = None
+        chat_type = None
 
-        # Получаем user_id из разных типов событий
+        # Получаем user_id и тип чата из разных типов событий
         if isinstance(event, Message):
             user_id = event.from_user.id if event.from_user else None
+            chat_type = event.chat.type if event.chat else None
         elif isinstance(event, CallbackQuery):
             user_id = event.from_user.id if event.from_user else None
+            chat_type = event.message.chat.type if event.message and event.message.chat else None
 
         if user_id is None:
+            return None
+
+        # В группах не обрабатываем админские команды
+        if chat_type in ['group', 'supergroup']:
             return None
 
         # Проверяем права администратора
         if not self.settings.is_admin(user_id):
             logger.warning(f"Пользователь {user_id} попытался выполнить действие администратора")
 
-            # Отправляем сообщение об отсутствии прав
-            if isinstance(event, Message):
+            # Отправляем сообщение об отсутствии прав только в личных сообщениях
+            if isinstance(event, Message) and chat_type == 'private':
                 await event.answer(
                     "❌ Это действие доступно только администраторам.\n\n"
                     "У вас есть права только на проверку сертификатов."
@@ -165,22 +181,29 @@ class VerifyRequiredMiddleware(BaseMiddleware):
             Any: Результат выполнения обработчика или None при отказе в доступе
         """
         user_id = None
+        chat_type = None
 
-        # Получаем user_id из разных типов событий
+        # Получаем user_id и тип чата из разных типов событий
         if isinstance(event, Message):
             user_id = event.from_user.id if event.from_user else None
+            chat_type = event.chat.type if event.chat else None
         elif isinstance(event, CallbackQuery):
             user_id = event.from_user.id if event.from_user else None
+            chat_type = event.message.chat.type if event.message and event.message.chat else None
 
         if user_id is None:
+            return None
+
+        # В группах не обрабатываем команды проверки
+        if chat_type in ['group', 'supergroup']:
             return None
 
         # Проверяем права на проверку (администраторы тоже могут проверять)
         if not self.settings.is_verify_user(user_id):
             logger.warning(f"Пользователь {user_id} попытался проверить сертификат без прав")
 
-            # Отправляем сообщение об отсутствии прав
-            if isinstance(event, Message):
+            # Отправляем сообщение об отсутствии прав только в личных сообщениях
+            if isinstance(event, Message) and chat_type == 'private':
                 await event.answer(
                     "❌ У вас нет прав на проверку сертификатов.\n\n"
                     "Обратитесь к администратору для получения необходимых прав."
