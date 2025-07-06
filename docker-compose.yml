@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # База данных PostgreSQL
   postgres:
@@ -59,8 +57,18 @@ services:
       DEBUG: ${DEBUG:-false}
       TIMEZONE: ${TIMEZONE:-Europe/Moscow}
     volumes:
-      - certificates_data:/app/certificates
-      - logs_data:/app/logs
+      # Создаем bind mounts для локальных директорий
+      # Docker автоматически создаст директории если их нет
+      - type: bind
+        source: ./data/certificates
+        target: /app/certificates
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ./data/logs
+        target: /app/logs
+        bind:
+          create_host_path: true
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,7 +113,11 @@ services:
       PGPASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data:ro
-      - ./backups:/backups
+      - type: bind
+        source: ./data/backups
+        target: /backups
+        bind:
+          create_host_path: true
     networks:
       - certificates_network
     profiles:
@@ -114,7 +126,7 @@ services:
       sh -c "
         echo 'Creating backup...' &&
         mkdir -p /backups &&
-        pg_dump -h postgres -U ${DB_USER:-certificates_user} -d ${DB_NAME:-certificates_db} > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql &&
+        pg_dump -h postgres -U ${DB_USER:-certificates_user} -d ${DB_NAME:-certificates_db} > /backups/backup_$(date +%Y%m%d_%H%M%S).sql &&
         echo 'Backup completed successfully!'
       "
     depends_on:
@@ -123,12 +135,6 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-
-  certificates_data:
-    driver: local
-
-  logs_data:
     driver: local
 
 networks:
