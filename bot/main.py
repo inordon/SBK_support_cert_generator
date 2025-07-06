@@ -32,11 +32,16 @@ class CertificateBot:
     def setup_logging(self):
         """Настройка логирования"""
         log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+
+        # Создаем директорию для логов если её нет
+        log_dir = Path('logs')
+        log_dir.mkdir(exist_ok=True)
+
         logging.basicConfig(
             level=getattr(logging, log_level),
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler('bot.log'),
+                logging.FileHandler('logs/bot.log'),
                 logging.StreamHandler()
             ]
         )
@@ -136,12 +141,27 @@ class CertificateBot:
             self.logger.error(f"Ошибка в боте: {exception}", exc_info=True)
 
     async def start(self):
-        """Запуск бота"""
-        try:
-            # Подключение к БД
-            await self.db_storage.connect()
-            self.logger.info("Подключение к БД установлено")
+        """Запуск бота с retry логикой"""
+        max_retries = 5
+        retry_delay = 5
 
+        # Подключение к БД с retry
+        for attempt in range(max_retries):
+            try:
+                await self.db_storage.connect()
+                self.logger.info("Подключение к БД установлено")
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    self.logger.warning(
+                        f"Попытка подключения к БД {attempt + 1}/{max_retries} не удалась: {e}"
+                    )
+                    await asyncio.sleep(retry_delay)
+                else:
+                    self.logger.error("Не удалось подключиться к БД после всех попыток")
+                    raise
+
+        try:
             # Получение информации о боте
             bot_info = await self.bot.get_me()
             self.logger.info(f"Бот запущен: @{bot_info.username}")

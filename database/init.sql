@@ -218,10 +218,15 @@ DO $$
 DECLARE
 app_password TEXT;
 BEGIN
-    -- Получаем пароль из переменной окружения
-    app_password := current_setting('CERT_APP_PASSWORD', true);
+    -- Получаем пароль из переменной окружения через параметр сессии
+    app_password := current_setting('app.cert_app_password', true);
 
-    -- Если переменная не установлена, используем дефолтный пароль
+    -- Если не удалось получить, пробуем через POSTGRES_CERT_APP_PASSWORD
+    IF app_password IS NULL THEN
+        app_password := current_setting('POSTGRES_CERT_APP_PASSWORD', true);
+END IF;
+
+    -- Если все еще нет пароля, используем дефолтный
     IF app_password IS NULL THEN
         app_password := 'defaultpass123';
         RAISE NOTICE 'CERT_APP_PASSWORD not set, using default password';
@@ -242,15 +247,19 @@ END IF;
     GRANT USAGE ON SCHEMA certificates TO cert_app;
 
     -- Предоставление прав на таблицы
-GRANT SELECT, INSERT, UPDATE, DELETE ON certificates TO cert_app;
-GRANT SELECT, INSERT ON certificate_history TO cert_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON certificates.certificates TO cert_app;
+GRANT SELECT, INSERT ON certificates.certificate_history TO cert_app;
 
 -- Предоставление прав на представления
-GRANT SELECT ON active_certificates TO cert_app;
-GRANT SELECT ON certificates_with_history TO cert_app;
+GRANT SELECT ON certificates.active_certificates TO cert_app;
+GRANT SELECT ON certificates.certificates_with_history TO cert_app;
 
 -- Предоставление прав на последовательности
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA certificates TO cert_app;
+
+    -- Предоставление прав на функции
+    GRANT EXECUTE ON FUNCTION certificates.get_certificate_stats() TO cert_app;
+    GRANT EXECUTE ON FUNCTION certificates.cleanup_old_history(INTEGER) TO cert_app;
 
     RAISE NOTICE 'User cert_app configured successfully';
 EXCEPTION
