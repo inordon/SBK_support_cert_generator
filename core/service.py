@@ -1,5 +1,5 @@
 """
-Основная бизнес-логика для работы с сертификатами.
+Основная бизнес-логика для работы с сертификатами - исправленная версия.
 """
 
 import logging
@@ -70,19 +70,8 @@ class CertificateService:
             # Сохраняем в БД
             db_certificate = self.certificate_repo.create_certificate(db_certificate_data)
 
-            # Создаем Pydantic модель для возврата
-            certificate = Certificate(
-                id=str(db_certificate.id),
-                certificate_id=db_certificate.certificate_id,
-                domain=db_certificate.domain,
-                inn=db_certificate.inn,
-                valid_from=db_certificate.valid_from,
-                valid_to=db_certificate.valid_to,
-                users_count=db_certificate.users_count,
-                created_at=db_certificate.created_at,
-                created_by=int(db_certificate.created_by),
-                is_active=db_certificate.is_active
-            )
+            # Создаем Pydantic модель для возврата из данных БД
+            certificate = self._convert_db_to_pydantic(db_certificate)
 
             # Сохраняем в файловое хранилище
             try:
@@ -134,18 +123,7 @@ class CertificateService:
             )
 
             # Создаем Pydantic модель
-            certificate = Certificate(
-                id=str(db_certificate.id),
-                certificate_id=db_certificate.certificate_id,
-                domain=db_certificate.domain,
-                inn=db_certificate.inn,
-                valid_from=db_certificate.valid_from,
-                valid_to=db_certificate.valid_to,
-                users_count=db_certificate.users_count,
-                created_at=db_certificate.created_at,
-                created_by=int(db_certificate.created_by),
-                is_active=db_certificate.is_active
-            )
+            certificate = self._convert_db_to_pydantic(db_certificate)
 
             logger.info(f"Сертификат {certificate_id} успешно проверен")
             return certificate
@@ -176,21 +154,7 @@ class CertificateService:
             )
 
             # Конвертируем в Pydantic модели
-            certificates = []
-            for db_cert in db_certificates:
-                certificate = Certificate(
-                    id=str(db_cert.id),
-                    certificate_id=db_cert.certificate_id,
-                    domain=db_cert.domain,
-                    inn=db_cert.inn,
-                    valid_from=db_cert.valid_from,
-                    valid_to=db_cert.valid_to,
-                    users_count=db_cert.users_count,
-                    created_at=db_cert.created_at,
-                    created_by=int(db_cert.created_by),
-                    is_active=db_cert.is_active
-                )
-                certificates.append(certificate)
+            certificates = [self._convert_db_to_pydantic(db_cert) for db_cert in db_certificates]
 
             logger.info(f"Найдено сертификатов: {len(certificates)}")
             return certificates
@@ -217,22 +181,7 @@ class CertificateService:
                 str(user_id), active_only
             )
 
-            certificates = []
-            for db_cert in db_certificates:
-                certificate = Certificate(
-                    id=str(db_cert.id),
-                    certificate_id=db_cert.certificate_id,
-                    domain=db_cert.domain,
-                    inn=db_cert.inn,
-                    valid_from=db_cert.valid_from,
-                    valid_to=db_cert.valid_to,
-                    users_count=db_cert.users_count,
-                    created_at=db_cert.created_at,
-                    created_by=int(db_cert.created_by),
-                    is_active=db_cert.is_active
-                )
-                certificates.append(certificate)
-
+            certificates = [self._convert_db_to_pydantic(db_cert) for db_cert in db_certificates]
             return certificates
 
         except Exception as e:
@@ -369,6 +318,29 @@ class CertificateService:
             result += f"\n\n... и еще {len(certificates) - max_items} сертификатов"
 
         return result
+
+    def _convert_db_to_pydantic(self, db_certificate: DBCertificate) -> Certificate:
+        """
+        Конвертирует объект БД в Pydantic модель.
+
+        Args:
+            db_certificate: Объект сертификата из БД
+
+        Returns:
+            Certificate: Pydantic модель сертификата
+        """
+        return Certificate(
+            id=str(db_certificate.id),
+            certificate_id=db_certificate.certificate_id,
+            domain=db_certificate.domain,
+            inn=db_certificate.inn,
+            valid_from=db_certificate.valid_from,
+            valid_to=db_certificate.valid_to,
+            users_count=db_certificate.users_count,
+            created_at=db_certificate.created_at,
+            created_by=int(db_certificate.created_by),
+            is_active=db_certificate.is_active
+        )
 
 
 # Глобальный экземпляр сервиса

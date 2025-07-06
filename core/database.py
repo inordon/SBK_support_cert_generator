@@ -1,3 +1,5 @@
+# core/database.py - критические исправления
+
 """
 Модели SQLAlchemy для работы с базой данных.
 """
@@ -129,6 +131,10 @@ class DatabaseManager:
 
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
+        # Добавляем ссылку на модели для использования в репозитории
+        self.Certificate = Certificate
+        self.CertificateHistory = CertificateHistory
+
     def create_tables(self):
         """Создает все таблицы в базе данных."""
         Base.metadata.create_all(bind=self.engine)
@@ -146,10 +152,9 @@ class DatabaseManager:
     def health_check(self) -> bool:
         """Проверяет подключение к базе данных."""
         try:
-            # Простая проверка подключения без выполнения SQL
-            connection = self.engine.connect()
-            connection.close()
-            return True
+            with self.get_session() as session:
+                session.execute(text("SELECT 1"))
+                return True
         except Exception as e:
             print(f"Ошибка подключения к БД: {e}")
             return False
@@ -181,7 +186,20 @@ class CertificateRepository:
             certificate = Certificate(**certificate_data)
             session.add(certificate)
             session.commit()
-            session.refresh(certificate)
+
+            # Получаем все данные объекта перед закрытием сессии
+            certificate_dict = {
+                'id': certificate.id,
+                'certificate_id': certificate.certificate_id,
+                'domain': certificate.domain,
+                'inn': certificate.inn,
+                'valid_from': certificate.valid_from,
+                'valid_to': certificate.valid_to,
+                'users_count': certificate.users_count,
+                'created_at': certificate.created_at,
+                'created_by': certificate.created_by,
+                'is_active': certificate.is_active
+            }
 
             # Добавляем запись в историю
             self._add_history_record(
@@ -193,7 +211,13 @@ class CertificateRepository:
             )
             session.commit()
 
-            return certificate
+            # Создаем новый объект Certificate с полученными данными
+            # Это позволяет избежать проблем с отключенной сессией
+            detached_certificate = Certificate(**certificate_data)
+            detached_certificate.id = certificate_dict['id']
+            detached_certificate.created_at = certificate_dict['created_at']
+
+            return detached_certificate
 
     def get_certificate_by_id(self, certificate_id: str) -> Optional[Certificate]:
         """
