@@ -124,24 +124,12 @@ services:
 volumes:
   postgres_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/postgres
 
   certificates_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/certificates
 
   logs_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/logs
 
 networks:
   certificates_network:

@@ -1,40 +1,4 @@
-# .gitignore для Certificate Management System
-
-# ============================================================================
-# IntelliJ IDEA / PyCharm
-# ============================================================================
-.idea/
-*.iml
-*.iws
-*.ipr
-out/
-.idea_modules/
-
-# User-specific stuff
-.idea/**/workspace.xml
-.idea/**/tasks.xml
-.idea/**/usage.statistics.xml
-.idea/**/dictionaries
-.idea/**/shelf
-
-# AWS User-specific
-.idea/**/aws.xml
-
-# Generated files
-.idea/**/contentModel.xml
-
-# Sensitive or high-churn files
-.idea/**/dataSources/
-.idea/**/dataSources.ids
-.idea/**/dataSources.local.xml
-.idea/**/sqlDataSources.xml
-.idea/**/dynamic.xml
-.idea/**/uiDesigner.xml
-.idea/**/dbnavigator.xml
-
-# ============================================================================
-# Python
-# ============================================================================
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -56,7 +20,6 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -64,6 +27,8 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -84,6 +49,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+cover/
 
 # Translations
 *.mo
@@ -106,6 +72,7 @@ instance/
 docs/_build/
 
 # PyBuilder
+.pybuilder/
 target/
 
 # Jupyter Notebook
@@ -116,12 +83,33 @@ profile_default/
 ipython_config.py
 
 # pyenv
-.python-version
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
 
 # pipenv
-Pipfile.lock
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
 
-# PEP 582
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/#use-with-ide
+.pdm.toml
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
 
 # Celery stuff
@@ -158,269 +146,65 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# ============================================================================
-# Конфиденциальная информация
-# ============================================================================
-# Основные конфиги с секретами
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be added to the global gitignore or merged into this project gitignore.  For a PyCharm
+#  project, it is generally recommended to exclude the entire .idea directory.
+.idea/
+
+# VS Code
+.vscode/
+
+# Certificate Bot specific files
 .env
 .env.local
 .env.production
-.env.development
-.env.staging
 
-# Переменные окружения
-*.env
-.environment
-
-# Файлы с токенами и ключами
-**/secrets/
-**/secret/
-**/*secret*
-**/*token*
-**/*key*
-*.pem
-*.key
-*.p12
-*.pfx
-config/secrets.yml
-config/database.yml
-
-# ============================================================================
-# База данных
-# ============================================================================
-# SQLite
-*.db
-*.sqlite
-*.sqlite3
-
-# PostgreSQL dumps
-*.dump
-*.sql.gz
-backup.sql
-dump.sql
-
-# Database backups
-db_backup/
-database_backups/
-backups/
-
-# ============================================================================
-# Логи
-# ============================================================================
+# Logs
 logs/
 *.log
-*.log.*
-log/
-log.*
-*.out
 
-# Rotated logs
-*.log.1
-*.log.2
-*.log.gz
+# Database backups
+*.sql
+backups/
 
-# Application specific logs
-bot.log
-api.log
-certificates.log
-app.log
-debug.log
-error.log
-access.log
-
-# ============================================================================
-# Сертификаты и файловое хранилище
-# ============================================================================
-# Основная директория с сертификатами (рабочие данные)
+# Certificates data (if using local storage)
 certificates/
-cert_storage/
-data/certificates/
 
-# Тестовые сертификаты
-test_certificates/
-temp_certificates/
-tmp_certificates/
+# Docker data (if using bind mounts)
+data/
 
-# Бэкапы сертификатов
-certificates_backup/
-*.tar.gz
-*.zip
-
-# ============================================================================
-# Docker
-# ============================================================================
-# Docker volumes data
-docker_data/
-postgres_data/
-redis_data/
-
-# Docker override files
-docker-compose.override.yml
-docker-compose.local.yml
-docker-compose.dev.yml
-
-# ============================================================================
-# Временные и кэш файлы
-# ============================================================================
-# Временные файлы
-tmp/
+# Temporary files
+.tmp/
 temp/
-*.tmp
-*.temp
-*.swp
-*.swo
-*~
 
-# Cache directories
-.cache/
-cache/
-__pycache__/
-
-# OS generated files
+# macOS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
+.AppleDouble
+.LSOverride
+
+# Windows
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# ============================================================================
-# Тестирование
-# ============================================================================
-# Coverage reports
-.coverage
-.coverage.*
-htmlcov/
-coverage_html_report/
+# Linux
+*~
 
-# Test databases
-test.db
-test.sqlite
-test_*.db
-
-# Temporary test files
-test_output/
-test_results/
-pytest_cache/
-
-# ============================================================================
-# Конфигурации IDE и редакторов
-# ============================================================================
-# Visual Studio Code
-.vscode/
-*.code-workspace
-
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
-
-# Vim
+# Editor backups
+*.bak
+*.backup
 *.swp
 *.swo
-.vim/
-
-# Emacs
 *~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
 
-# ============================================================================
-# Мониторинг и метрики
-# ============================================================================
-# Prometheus metrics
-metrics/
-prometheus_data/
-
-# Health check files
-health_check.tmp
-health.txt
-
-# ============================================================================
-# SSL сертификаты и безопасность
-# ============================================================================
-# SSL certificates
-ssl/
-certs/
-*.crt
-*.cert
-*.ca-bundle
-*.cer
-*.p7b
-*.p7s
-
-# GPG keys
-*.gpg
-*.asc
-
-# ============================================================================
-# Развертывание и CI/CD
-# ============================================================================
-# Deployment scripts with secrets
-deploy_prod.sh
-deploy_with_secrets.sh
-
-# Kubernetes secrets
-*-secret.yaml
-*-secrets.yaml
-
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-
-# Ansible
-*.retry
-
-# ============================================================================
-# Документация (сгенерированная)
-# ============================================================================
-# Auto-generated docs
-docs/build/
-docs/_build/
-site/
-
-# API documentation
-api_docs/
-openapi.json
-swagger.json
-
-# ============================================================================
-# Специфично для проекта
-# ============================================================================
-# Рабочие файлы разработчика
-notes.txt
-todo.txt
-README_dev.md
-
-# Локальные скрипты
-local_*.py
-dev_*.py
-test_local.py
-
-# Временные файлы разработки
-playground/
-sandbox/
-experiments/
-
-# Данные для тестирования
-test_data/
-sample_data/
-mock_data/
-
-# ============================================================================
-# Добавьте сюда проектно-специфичные файлы
-# ============================================================================
-
-# Примеры файлов, которые стоит НЕ игнорировать:
-# !.env.example
-# !docker-compose.yml
-# !requirements.txt
-# !README.md
-
-# Финальная строка - всегда оставляйте пустую строку в конце
+# Alembic
+migrations/versions/*.py
+!migrations/versions/__init__.py
