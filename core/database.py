@@ -187,20 +187,6 @@ class CertificateRepository:
             session.add(certificate)
             session.commit()
 
-            # Получаем все данные объекта перед закрытием сессии
-            certificate_dict = {
-                'id': certificate.id,
-                'certificate_id': certificate.certificate_id,
-                'domain': certificate.domain,
-                'inn': certificate.inn,
-                'valid_from': certificate.valid_from,
-                'valid_to': certificate.valid_to,
-                'users_count': certificate.users_count,
-                'created_at': certificate.created_at,
-                'created_by': certificate.created_by,
-                'is_active': certificate.is_active
-            }
-
             # Добавляем запись в историю
             self._add_history_record(
                 session,
@@ -211,13 +197,11 @@ class CertificateRepository:
             )
             session.commit()
 
-            # Создаем новый объект Certificate с полученными данными
-            # Это позволяет избежать проблем с отключенной сессией
-            detached_certificate = Certificate(**certificate_data)
-            detached_certificate.id = certificate_dict['id']
-            detached_certificate.created_at = certificate_dict['created_at']
+            # Возвращаем объект с актуальными данными
+            # Используем expunge чтобы объект можно было использовать вне сессии
+            session.expunge(certificate)
 
-            return detached_certificate
+            return certificate
 
     def get_certificate_by_id(self, certificate_id: str) -> Optional[Certificate]:
         """

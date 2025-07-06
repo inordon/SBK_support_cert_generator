@@ -329,6 +329,9 @@ class CertificateService:
         Returns:
             Certificate: Pydantic модель сертификата
         """
+        # Получаем значение is_active, если оно None, то устанавливаем True
+        is_active = db_certificate.is_active if db_certificate.is_active is not None else True
+
         return Certificate(
             id=str(db_certificate.id),
             certificate_id=db_certificate.certificate_id,
@@ -339,7 +342,7 @@ class CertificateService:
             users_count=db_certificate.users_count,
             created_at=db_certificate.created_at,
             created_by=int(db_certificate.created_by),
-            is_active=db_certificate.is_active
+            is_active=is_active
         )
 
 
