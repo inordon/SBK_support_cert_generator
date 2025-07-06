@@ -6,13 +6,25 @@ set -e
 
 echo "🔄 Полная очистка и перезапуск системы сертификатов..."
 
+# Определение команды Docker Compose
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+else
+    echo "❌ Docker Compose не найден! Установите Docker Compose."
+    exit 1
+fi
+
+echo "✅ Используется: $DOCKER_COMPOSE"
+
 # Остановка всех сервисов
 echo "⏹️ Остановка сервисов..."
-docker-compose down
+$DOCKER_COMPOSE down
 
 # Удаление volumes
 echo "🗑️ Удаление volumes..."
-docker-compose down -v
+$DOCKER_COMPOSE down -v
 
 # Принудительное удаление volumes
 echo "🗑️ Принудительное удаление volumes..."
@@ -123,16 +135,16 @@ echo "✅ Переменные окружения настроены корре�
 
 # Пересборка образов
 echo "🔨 Пересборка образов..."
-docker-compose build --no-cache --pull
+$DOCKER_COMPOSE build --no-cache --pull
 
 # Запуск сервисов
 echo "🚀 Запуск сервисов..."
-docker-compose up -d
+$DOCKER_COMPOSE up -d
 
 # Ожидание запуска PostgreSQL
 echo "⏳ Ожидание запуска PostgreSQL..."
 for i in {1..30}; do
-    if docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+    if $DOCKER_COMPOSE exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
         echo "✅ PostgreSQL запущен"
         break
     fi
@@ -146,18 +158,18 @@ sleep 10
 
 # Проверка создания пользователя
 echo "🔍 Проверка пользователя cert_app..."
-if docker-compose exec -T postgres psql -U postgres -d certificates_db -c "SELECT usename FROM pg_user WHERE usename = 'cert_app';" | grep -q cert_app; then
+if $DOCKER_COMPOSE exec -T postgres psql -U postgres -d certificates_db -c "SELECT usename FROM pg_user WHERE usename = 'cert_app';" | grep -q cert_app; then
     echo "✅ Пользователь cert_app создан успешно"
 else
     echo "❌ Пользователь cert_app не создан"
     echo "📋 Логи PostgreSQL:"
-    docker-compose logs postgres --tail=20
+    $DOCKER_COMPOSE logs postgres --tail=20
     exit 1
 fi
 
 # Проверка подключения пользователя
 echo "🔍 Проверка подключения пользователя..."
-if docker-compose exec -T postgres psql -U cert_app -d certificates_db -c "SELECT current_user;" >/dev/null 2>&1; then
+if $DOCKER_COMPOSE exec -T postgres psql -U cert_app -d certificates_db -c "SELECT current_user;" >/dev/null 2>&1; then
     echo "✅ Пользователь cert_app может подключаться к БД"
 else
     echo "❌ Пользователь cert_app не может подключиться к БД"
@@ -166,7 +178,7 @@ fi
 
 # Проверка таблиц
 echo "🔍 Проверка таблиц..."
-if docker-compose exec -T postgres psql -U cert_app -d certificates_db -c "\dt certificates.*" | grep -q certificates; then
+if $DOCKER_COMPOSE exec -T postgres psql -U cert_app -d certificates_db -c "\dt certificates.*" | grep -q certificates; then
     echo "✅ Таблицы созданы и доступны"
 else
     echo "❌ Таблицы не созданы или недоступны"
@@ -175,7 +187,7 @@ fi
 
 # Проверка статуса сервисов
 echo "📊 Проверка статуса сервисов..."
-docker-compose ps
+$DOCKER_COMPOSE ps
 
 # Проверка API
 echo "🔍 Проверка API..."
@@ -185,21 +197,21 @@ if curl -f http://localhost:8000/health >/dev/null 2>&1; then
 else
     echo "⚠️ API еще запускается или есть проблемы"
     echo "📋 Логи API:"
-    docker-compose logs api --tail=10
+    $DOCKER_COMPOSE logs api --tail=10
 fi
 
 echo ""
 echo "🎉 Система успешно запущена!"
 echo ""
 echo "🔗 Полезные команды:"
-echo "  docker-compose logs -f              # Просмотр логов"
-echo "  docker-compose ps                   # Статус сервисов"
+echo "  $DOCKER_COMPOSE logs -f              # Просмотр логов"
+echo "  $DOCKER_COMPOSE ps                   # Статус сервисов"
 echo "  curl http://localhost:8000/health   # Проверка API"
 echo ""
 echo "🤖 Telegram бот готов к работе!"
 echo "   Найдите вашего бота и отправьте /start"
 echo ""
 echo "📋 Для отладки:"
-echo "  docker-compose logs bot     # Логи бота"
-echo "  docker-compose logs api     # Логи API"
-echo "  docker-compose logs postgres # Логи БД"
+echo "  $DOCKER_COMPOSE logs bot     # Логи бота"
+echo "  $DOCKER_COMPOSE logs api     # Логи API"
+echo "  $DOCKER_COMPOSE logs postgres # Логи БД"
