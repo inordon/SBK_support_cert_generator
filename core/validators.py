@@ -1,3 +1,5 @@
+# core/validators.py - исправленная версия (убрано ограничение на количество пользователей)
+
 """
 Модуль валидации входных данных для сертификатов.
 """
@@ -206,7 +208,8 @@ class UsersCountValidator:
         Returns:
             bool: True если количество валидно, False иначе
         """
-        return isinstance(users_count, int) and 1 <= users_count <= 1000
+        # Убрано верхнее ограничение, оставлено только минимальное значение 1
+        return isinstance(users_count, int) and users_count >= 1
 
 
 class CertificateIDValidator:
@@ -307,6 +310,6 @@ class DataValidator:
 
         # Валидация количества пользователей
         if not self.users_count_validator.validate(users_count):
-            errors.append(f"Некорректное количество пользователей: {users_count}")
+            errors.append(f"Количество пользователей должно быть больше 0: {users_count}")
 
         return errors

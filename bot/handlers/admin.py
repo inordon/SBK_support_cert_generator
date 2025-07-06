@@ -1,8 +1,9 @@
 """
-Обработчики команд для администраторов.
+Обработчики команд для администраторов - исправленная версия.
 """
 
 import logging
+import re
 from datetime import datetime, date, timedelta
 from aiogram import Router, F
 from aiogram.types import Message
@@ -10,11 +11,9 @@ from aiogram.fsm.context import FSMContext
 from core.service import get_certificate_service
 from core.models import CertificateRequest
 from core.exceptions import *
-from core.validators import PeriodValidator
 from ..states import CreateCertificateStates
 from ..keyboards import (
-    get_main_menu_admin, get_period_presets_keyboard, get_users_count_presets_keyboard,
-    get_confirmation_keyboard, get_duplicate_confirmation_keyboard, get_cancel_keyboard,
+    get_main_menu_admin, get_confirmation_keyboard, get_cancel_keyboard,
     ButtonTexts, remove_keyboard
 )
 from ..middleware import admin_required
@@ -34,274 +33,207 @@ async def start_create_certificate(message: Message, state: FSMContext):
     """Начинает процесс создания сертификата."""
     await state.clear()  # Очищаем предыдущие состояния
 
+    instruction_text = """📝 Создание нового сертификата
+
+Отправьте информацию в следующем формате:
+
+```
+Срок действия: ДД.ММ.ГГГГ-ДД.ММ.ГГГГ
+ИНН: 1234567890
+Домен: example.com
+Количество пользователей: 100
+```
+
+📋 Примеры:
+```
+Срок действия: 01.01.2025-31.12.2025
+ИНН: 7707083893
+Домен: my-site.com
+Количество пользователей: 500
+```
+
+```
+Срок действия: 01.07.2025-30.06.2026
+ИНН: 1234567890
+Домен: *.example.com
+Количество пользователей: 1
+```
+
+ℹ️ Поддерживаемые форматы доменов:
+• example.com
+• sub.example.com
+• my-site.com
+• *.example.com (wildcard)
+• *.sub.example.com
+
+Отправьте данные или нажмите "Отменить":"""
+
     await message.answer(
-        "📝 Создание нового сертификата\n\n"
-        "Введите доменное имя для сертификата.\n\n"
-        "Поддерживаемые форматы:\n"
-        "• example.com\n"
-        "• sub.example.com\n"
-        "• *.example.com\n"
-        "• *.sub.example.com\n\n"
-        "Домены могут содержать дефисы: my-site.com",
-        reply_markup=get_cancel_keyboard()
+        instruction_text,
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="Markdown"
     )
 
-    await state.set_state(CreateCertificateStates.waiting_for_domain)
+    await state.set_state(CreateCertificateStates.waiting_for_certificate_data)
 
 
-@router.message(CreateCertificateStates.waiting_for_domain)
-async def process_domain_input(message: Message, state: FSMContext):
-    """Обрабатывает ввод домена."""
+@router.message(CreateCertificateStates.waiting_for_certificate_data)
+async def process_certificate_data(message: Message, state: FSMContext):
+    """Обрабатывает данные сертификата, переданные одним сообщением."""
     if message.text == ButtonTexts.CANCEL:
         await cancel_creation(message, state)
         return
 
-    domain = message.text.strip().lower()
-
-    # Валидируем домен
-    errors = certificate_service.validate_certificate_data(
-        domain=domain,
-        inn="1234567890",  # Временные значения для валидации только домена
-        valid_from=date.today(),
-        valid_to=date.today() + timedelta(days=365),
-        users_count=1
-    )
-
-    domain_errors = [error for error in errors if "домен" in error.lower()]
-
-    if domain_errors:
-        await message.answer(
-            f"❌ Ошибка валидации домена:\n\n{domain_errors[0]}\n\n"
-            "Попробуйте еще раз или нажмите 'Отменить':",
-            reply_markup=get_cancel_keyboard()
-        )
-        return
-
-    # Проверяем существующие сертификаты для домена
     try:
-        from core.models import SearchRequest
-        search_request = SearchRequest(domain=domain, active_only=True)
-        existing_certificates = certificate_service.search_certificates(search_request)
+        # Парсим данные из сообщения
+        certificate_data = parse_certificate_message(message.text)
 
-        # Сохраняем данные в состоянии
-        await state.update_data(domain=domain, has_existing=len(existing_certificates) > 0)
+        # Валидируем данные
+        errors = certificate_service.validate_certificate_data(
+            certificate_data['domain'],
+            certificate_data['inn'],
+            certificate_data['valid_from'],
+            certificate_data['valid_to'],
+            certificate_data['users_count']
+        )
 
-        if existing_certificates:
-            certificates_list = certificate_service.format_certificates_list(existing_certificates)
+        if errors:
+            error_text = "❌ Ошибки валидации:\n\n" + "\n".join(f"• {error}" for error in errors)
+            error_text += "\n\nПопробуйте еще раз или нажмите 'Отменить':"
+
             await message.answer(
-                f"⚠️ Для домена {domain} уже существуют активные сертификаты:\n\n"
-                f"{certificates_list}\n\n"
-                "Продолжить создание нового сертификата?"
+                error_text,
+                reply_markup=get_cancel_keyboard()
+            )
+            return
+
+        # Проверяем существующие сертификаты для домена
+        try:
+            from core.models import SearchRequest
+            search_request = SearchRequest(domain=certificate_data['domain'], active_only=True)
+            existing_certificates = certificate_service.search_certificates(search_request)
+
+            # Сохраняем данные в состоянии
+            await state.update_data(**certificate_data, has_existing=len(existing_certificates) > 0)
+
+            if existing_certificates:
+                certificates_list = certificate_service.format_certificates_list(existing_certificates)
+                await message.answer(
+                    f"⚠️ Для домена {certificate_data['domain']} уже существуют активные сертификаты:\n\n"
+                    f"{certificates_list}\n\n"
+                    "Продолжить создание нового сертификата?"
+                )
+
+            # Форматируем информацию для подтверждения
+            period_str = f"{certificate_data['valid_from'].strftime('%d.%m.%Y')}-{certificate_data['valid_to'].strftime('%d.%m.%Y')}"
+
+            confirmation_text = (
+                "✅ Подтвердите создание сертификата:\n\n"
+                f"🌐 Домен: {certificate_data['domain']}\n"
+                f"🏢 ИНН: {certificate_data['inn']}\n"
+                f"📅 Период: {period_str}\n"
+                f"👥 Пользователей: {certificate_data['users_count']}\n"
             )
 
+            if len(existing_certificates) > 0:
+                confirmation_text += "\n⚠️ Для этого домена уже есть активные сертификаты!"
+
+            await message.answer(
+                confirmation_text,
+                reply_markup=get_confirmation_keyboard()
+            )
+
+            await state.set_state(CreateCertificateStates.waiting_for_confirmation)
+
+        except Exception as e:
+            logger.error(f"Ошибка при проверке существующих сертификатов: {e}")
+            await message.answer(
+                "❌ Произошла ошибка при проверке существующих сертификатов. "
+                "Попробуйте еще раз.",
+                reply_markup=get_cancel_keyboard()
+            )
+
+    except ValueError as e:
         await message.answer(
-            "Введите ИНН организации (10 или 12 цифр):",
+            f"❌ Ошибка формата данных: {e}\n\n"
+            "Проверьте формат и попробуйте еще раз:",
             reply_markup=get_cancel_keyboard()
         )
-
-        await state.set_state(CreateCertificateStates.waiting_for_inn)
-
     except Exception as e:
-        logger.error(f"Ошибка при проверке существующих сертификатов: {e}")
+        logger.error(f"Ошибка обработки данных сертификата: {e}")
         await message.answer(
-            "❌ Произошла ошибка при проверке существующих сертификатов. "
-            "Попробуйте еще раз.",
-            reply_markup=get_cancel_keyboard()
-        )
-
-
-@router.message(CreateCertificateStates.waiting_for_inn)
-async def process_inn_input(message: Message, state: FSMContext):
-    """Обрабатывает ввод ИНН."""
-    if message.text == ButtonTexts.CANCEL:
-        await cancel_creation(message, state)
-        return
-
-    inn = message.text.strip()
-
-    # Валидируем ИНН
-    errors = certificate_service.validate_certificate_data(
-        domain="example.com",  # Временное значение
-        inn=inn,
-        valid_from=date.today(),
-        valid_to=date.today() + timedelta(days=365),
-        users_count=1
-    )
-
-    inn_errors = [error for error in errors if "инн" in error.lower()]
-
-    if inn_errors:
-        await message.answer(
-            f"❌ Ошибка валидации ИНН:\n\n{inn_errors[0]}\n\n"
+            "❌ Произошла неожиданная ошибка при обработке данных.\n\n"
             "Попробуйте еще раз или нажмите 'Отменить':",
             reply_markup=get_cancel_keyboard()
         )
-        return
-
-    # Сохраняем ИНН в состоянии
-    await state.update_data(inn=inn)
-
-    await message.answer(
-        "📅 Выберите период действия сертификата:",
-        reply_markup=get_period_presets_keyboard()
-    )
-
-    await state.set_state(CreateCertificateStates.waiting_for_period)
 
 
-@router.message(CreateCertificateStates.waiting_for_period)
-async def process_period_input(message: Message, state: FSMContext):
-    """Обрабатывает ввод периода действия."""
-    if message.text == ButtonTexts.CANCEL:
-        await cancel_creation(message, state)
-        return
+def parse_certificate_message(text: str) -> dict:
+    """
+    Парсит сообщение с данными сертификата.
 
-    if message.text == ButtonTexts.BACK:
-        await message.answer(
-            "Введите ИНН организации (10 или 12 цифр):",
-            reply_markup=get_cancel_keyboard()
-        )
-        await state.set_state(CreateCertificateStates.waiting_for_inn)
-        return
+    Args:
+        text: Текст сообщения
 
-    # Проверяем, выбран ли предустановленный период
-    months = ButtonTexts.get_period_months(message.text)
+    Returns:
+        dict: Словарь с данными сертификата
 
-    if months > 0:
-        # Рассчитываем даты
-        valid_from = date.today()
-        valid_to = valid_from + timedelta(days=months * 30)  # Приблизительно
+    Raises:
+        ValueError: При ошибке парсинга
+    """
+    # Удаляем лишние пробелы и переводы строк
+    text = text.strip()
 
-        # Корректируем конечную дату на последний день месяца
-        if valid_to.day != valid_from.day:
-            next_month = valid_to.replace(day=1) + timedelta(days=32)
-            valid_to = next_month.replace(day=1) - timedelta(days=1)
+    # Инициализируем результат
+    result = {}
 
-    elif message.text == ButtonTexts.PERIOD_MANUAL:
-        await message.answer(
-            "Введите период действия в формате: ДД.ММ.ГГГГ-ДД.ММ.ГГГГ\n\n"
-            "Например: 01.01.2024-31.12.2024",
-            reply_markup=get_cancel_keyboard()
-        )
-        return
+    # Паттерны для поиска данных
+    patterns = {
+        'period': r'срок\s+действия\s*:\s*(\d{1,2}\.\d{1,2}\.\d{4})\s*-\s*(\d{1,2}\.\d{1,2}\.\d{4})',
+        'inn': r'инн\s*:\s*(\d{10,12})',
+        'domain': r'домен\s*:\s*([a-zA-Z0-9.*-]+\.[a-zA-Z]{2,})',
+        'users': r'количество\s+пользователей\s*:\s*(\d+)'
+    }
 
-    else:
-        # Попытка парсинга ручного ввода
-        try:
-            period_validator = PeriodValidator()
-            valid_from, valid_to = period_validator.parse_period_string(message.text)
-        except Exception as e:
-            await message.answer(
-                f"❌ Неверный формат периода: {e}\n\n"
-                "Используйте формат: ДД.ММ.ГГГГ-ДД.ММ.ГГГГ\n"
-                "Или выберите готовый вариант:",
-                reply_markup=get_period_presets_keyboard()
-            )
-            return
+    # Ищем период действия
+    period_match = re.search(patterns['period'], text, re.IGNORECASE | re.UNICODE)
+    if not period_match:
+        raise ValueError("Не найден срок действия. Используйте формат: Срок действия: ДД.ММ.ГГГГ-ДД.ММ.ГГГГ")
 
-    # Валидируем период
-    errors = certificate_service.validate_certificate_data(
-        domain="example.com",  # Временные значения
-        inn="1234567890",
-        valid_from=valid_from,
-        valid_to=valid_to,
-        users_count=1
-    )
+    try:
+        valid_from = datetime.strptime(period_match.group(1), "%d.%m.%Y").date()
+        valid_to = datetime.strptime(period_match.group(2), "%d.%m.%Y").date()
+        result['valid_from'] = valid_from
+        result['valid_to'] = valid_to
+    except ValueError as e:
+        raise ValueError(f"Неверный формат даты: {e}")
 
-    period_errors = [error for error in errors if any(word in error.lower()
-                                                      for word in ["дата", "период", "год"])]
+    # Ищем ИНН
+    inn_match = re.search(patterns['inn'], text, re.IGNORECASE)
+    if not inn_match:
+        raise ValueError("Не найден ИНН. Используйте формат: ИНН: 1234567890")
+    result['inn'] = inn_match.group(1)
 
-    if period_errors:
-        await message.answer(
-            f"❌ Ошибка валидации периода:\n\n{period_errors[0]}\n\n"
-            "Выберите другой период:",
-            reply_markup=get_period_presets_keyboard()
-        )
-        return
+    # Ищем домен
+    domain_match = re.search(patterns['domain'], text, re.IGNORECASE)
+    if not domain_match:
+        raise ValueError("Не найден домен. Используйте формат: Домен: example.com")
+    result['domain'] = domain_match.group(1).lower()
 
-    # Сохраняем период в состоянии
-    await state.update_data(valid_from=valid_from, valid_to=valid_to)
+    # Ищем количество пользователей
+    users_match = re.search(patterns['users'], text, re.IGNORECASE | re.UNICODE)
+    if not users_match:
+        raise ValueError("Не найдено количество пользователей. Используйте формат: Количество пользователей: 100")
 
-    await message.answer(
-        "👥 Выберите количество пользователей:",
-        reply_markup=get_users_count_presets_keyboard()
-    )
+    try:
+        users_count = int(users_match.group(1))
+        if users_count < 1:
+            raise ValueError("Количество пользователей должно быть больше 0")
+        result['users_count'] = users_count
+    except ValueError as e:
+        raise ValueError(f"Неверное количество пользователей: {e}")
 
-    await state.set_state(CreateCertificateStates.waiting_for_users_count)
-
-
-@router.message(CreateCertificateStates.waiting_for_users_count)
-async def process_users_count_input(message: Message, state: FSMContext):
-    """Обрабатывает ввод количества пользователей."""
-    if message.text == ButtonTexts.CANCEL:
-        await cancel_creation(message, state)
-        return
-
-    if message.text == ButtonTexts.BACK:
-        await message.answer(
-            "📅 Выберите период действия сертификата:",
-            reply_markup=get_period_presets_keyboard()
-        )
-        await state.set_state(CreateCertificateStates.waiting_for_period)
-        return
-
-    # Проверяем, выбрано ли предустановленное значение
-    users_count = ButtonTexts.extract_users_count(message.text)
-
-    if users_count > 0:
-        # Значение выбрано из предустановленных
-        pass
-    elif message.text == ButtonTexts.USERS_MANUAL:
-        await message.answer(
-            "Введите количество пользователей (от 1 до 1000):",
-            reply_markup=get_cancel_keyboard()
-        )
-        return
-    else:
-        # Попытка парсинга ручного ввода
-        try:
-            users_count = int(message.text.strip())
-        except ValueError:
-            await message.answer(
-                "❌ Неверный формат числа. Введите целое число от 1 до 1000:",
-                reply_markup=get_users_count_presets_keyboard()
-            )
-            return
-
-    # Валидируем количество пользователей
-    if not (1 <= users_count <= 1000):
-        await message.answer(
-            "❌ Количество пользователей должно быть от 1 до 1000:",
-            reply_markup=get_users_count_presets_keyboard()
-        )
-        return
-
-    # Сохраняем количество пользователей
-    await state.update_data(users_count=users_count)
-
-    # Получаем все данные для подтверждения
-    data = await state.get_data()
-
-    # Форматируем информацию для подтверждения
-    period_str = f"{data['valid_from'].strftime('%d.%m.%Y')}-{data['valid_to'].strftime('%d.%m.%Y')}"
-
-    confirmation_text = (
-        "✅ Подтвердите создание сертификата:\n\n"
-        f"🌐 Домен: {data['domain']}\n"
-        f"🏢 ИНН: {data['inn']}\n"
-        f"📅 Период: {period_str}\n"
-        f"👥 Пользователей: {users_count}\n"
-    )
-
-    if data.get('has_existing', False):
-        confirmation_text += "\n⚠️ Для этого домена уже есть активные сертификаты!"
-
-    await message.answer(
-        confirmation_text,
-        reply_markup=get_confirmation_keyboard()
-    )
-
-    await state.set_state(CreateCertificateStates.waiting_for_confirmation)
+    return result
 
 
 @router.message(CreateCertificateStates.waiting_for_confirmation)
@@ -340,7 +272,8 @@ async def process_confirmation(message: Message, state: FSMContext):
 
         await message.answer(
             f"✅ Сертификат успешно создан!\n\n{cert_info}",
-            reply_markup=get_main_menu_admin()
+            reply_markup=get_main_menu_admin(),
+            parse_mode="Markdown"
         )
 
         # Отправляем уведомление в группу

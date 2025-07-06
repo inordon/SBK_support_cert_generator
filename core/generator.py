@@ -1,3 +1,5 @@
+# core/generator.py - исправленная версия
+
 """
 Генератор уникальных номеров сертификатов.
 """
@@ -81,13 +83,14 @@ class CertificateIDGenerator:
         second_block = self._generate_block()
         third_block = self._generate_block()
 
-        # Генерируем первые 2 символа последнего блока
-        last_block_prefix = ''.join(random.choices(self.characters, k=2))
+        # Последний блок всегда должен быть 5 символов: X + MMYY
+        # Генерируем первый символ последнего блока
+        last_block_prefix = ''.join(random.choices(self.characters, k=1))
 
-        # Формируем последний блок: 2 случайных символа + суффикс
+        # Формируем последний блок: 1 случайный символ + суффикс (4 символа) = 5 символов
         last_block = last_block_prefix + suffix
 
-        # Собираем полный ID
+        # Собираем полный ID: 5+1+5+1+5+1+5 = 23 символа
         return f"{first_block}-{second_block}-{third_block}-{last_block}"
 
     def _generate_block(self) -> str:
@@ -115,8 +118,13 @@ class CertificateIDGenerator:
         if len(certificate_id) != 23 or certificate_id.count('-') != 3:
             raise GenerationError(f"Неверный формат ID сертификата: {certificate_id}")
 
-        # Извлекаем последние 4 символа
-        suffix = certificate_id[-4:]
+        # Извлекаем последние 4 символа (без дефисов)
+        # Формат: XXXXX-XXXXX-XXXXX-XMMYY
+        last_block = certificate_id.split('-')[-1]  # Получаем последний блок
+        if len(last_block) != 5:
+            raise GenerationError(f"Неверный формат последнего блока в ID: {last_block}")
+
+        suffix = last_block[1:]  # Берем последние 4 символа (пропускаем первый)
 
         try:
             month = int(suffix[:2])
@@ -125,10 +133,12 @@ class CertificateIDGenerator:
             # Конвертируем 2-значный год в 4-значный
             # Предполагаем, что все годы относятся к 21 веку
             current_year = date.today().year
+            current_century = current_year // 100
+
             if year_short <= (current_year % 100):
-                year = 2000 + year_short
+                year = current_century * 100 + year_short
             else:
-                year = 1900 + year_short
+                year = (current_century - 1) * 100 + year_short
 
             # Проверяем корректность месяца
             if not (1 <= month <= 12):
@@ -205,6 +215,10 @@ def main():
             print(f"\nИз ID {example} извлечена дата окончания: {month:02d}.{year}")
         except GenerationError as e:
             print(f"Ошибка: {e}")
+
+    # Проверяем валидацию
+    print(f"\nВалидация ID {examples[0]}: {generator.validate_id_format(examples[0])}")
+    print(f"Валидация неверного ID: {generator.validate_id_format('INVALID-ID-FORMAT')}")
 
 
 if __name__ == "__main__":

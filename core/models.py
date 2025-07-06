@@ -1,3 +1,5 @@
+# core/models.py - исправленная версия
+
 """
 Pydantic модели для валидации и сериализации данных сертификатов.
 """
@@ -14,26 +16,79 @@ class CertificateRequest(BaseModel):
     inn: str = Field(..., min_length=10, max_length=12, description="ИНН организации")
     valid_from: date = Field(..., description="Дата начала действия")
     valid_to: date = Field(..., description="Дата окончания действия")
-    users_count: int = Field(..., ge=1, le=1000, description="Количество пользователей")
+    users_count: int = Field(..., ge=1, description="Количество пользователей")
     created_by: int = Field(..., description="Telegram ID создателя")
 
     @validator('domain')
     def validate_domain(cls, v):
         """Валидация доменного имени."""
-        from .validators import DomainValidator
-        validator = DomainValidator()
-        if not validator.validate(v):
-            raise DomainValidationError(f"Некорректный домен: {v}")
-        return v.lower()
+        # Перенесем логику валидации сюда, избегая circular import
+        domain = v.lower().strip()
+
+        # Базовая валидация длины
+        if not domain or len(domain) > 255:
+            raise DomainValidationError(f"Некорректная длина домена: {domain}")
+
+        # Проверка паттерна
+        import re
+        domain_pattern = re.compile(r'^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$')
+        if not domain_pattern.match(domain):
+            raise DomainValidationError(f"Некорректный формат домена: {domain}")
+
+        # Обрабатываем wildcard
+        test_domain = domain[2:] if domain.startswith('*.') else domain
+
+        # Разделяем на части
+        parts = test_domain.split('.')
+        if len(parts) < 2:
+            raise DomainValidationError(f"Домен должен содержать минимум 2 части: {domain}")
+
+        # Валидируем каждую часть
+        domain_part_pattern = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$')
+        for part in parts:
+            if not part or len(part) > 63:
+                raise DomainValidationError(f"Некорректная часть домена: {part}")
+            if part.startswith('-') or part.endswith('-'):
+                raise DomainValidationError(f"Часть домена не может начинаться или заканчиваться дефисом: {part}")
+            if not domain_part_pattern.match(part):
+                raise DomainValidationError(f"Некорректные символы в части домена: {part}")
+
+        return domain
 
     @validator('inn')
     def validate_inn(cls, v):
         """Валидация ИНН."""
-        from .validators import INNValidator
-        validator = INNValidator()
-        if not validator.validate(v):
-            raise INNValidationError(f"Некорректный ИНН: {v}")
-        return v
+        inn = v.strip()
+
+        if not inn or not inn.isdigit():
+            raise INNValidationError(f"ИНН должен содержать только цифры: {inn}")
+
+        if len(inn) == 10:
+            # Валидация 10-значного ИНН
+            coefficients = [2, 4, 10, 3, 5, 9, 4, 6, 8]
+            checksum = sum(int(inn[i]) * coefficients[i] for i in range(9))
+            control_digit = (checksum % 11) % 10
+            if int(inn[9]) != control_digit:
+                raise INNValidationError(f"Некорректная контрольная сумма ИНН: {inn}")
+        elif len(inn) == 12:
+            # Валидация 12-значного ИНН
+            # Первая контрольная цифра
+            coefficients_1 = [7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
+            checksum_1 = sum(int(inn[i]) * coefficients_1[i] for i in range(10))
+            control_digit_1 = (checksum_1 % 11) % 10
+            if int(inn[10]) != control_digit_1:
+                raise INNValidationError(f"Некорректная первая контрольная сумма ИНН: {inn}")
+
+            # Вторая контрольная цифра
+            coefficients_2 = [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
+            checksum_2 = sum(int(inn[i]) * coefficients_2[i] for i in range(11))
+            control_digit_2 = (checksum_2 % 11) % 10
+            if int(inn[11]) != control_digit_2:
+                raise INNValidationError(f"Некорректная вторая контрольная сумма ИНН: {inn}")
+        else:
+            raise INNValidationError(f"ИНН должен содержать 10 или 12 цифр: {inn}")
+
+        return inn
 
     @validator('valid_to')
     def validate_period(cls, v, values):
