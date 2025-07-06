@@ -64,7 +64,8 @@ class CertificateService:
                 "valid_from": request.valid_from,
                 "valid_to": request.valid_to,
                 "users_count": request.users_count,
-                "created_by": str(request.created_by)
+                "created_by": str(request.created_by),
+                "is_active": True  # Явно устанавливаем значение
             }
 
             # Сохраняем в БД
@@ -329,8 +330,16 @@ class CertificateService:
         Returns:
             Certificate: Pydantic модель сертификата
         """
-        # Получаем значение is_active, если оно None, то устанавливаем True
-        is_active = db_certificate.is_active if db_certificate.is_active is not None else True
+        # Получаем значения с проверкой на None
+        is_active = getattr(db_certificate, 'is_active', True)
+        if is_active is None:
+            is_active = True
+
+        created_by = getattr(db_certificate, 'created_by', '0')
+        try:
+            created_by_int = int(created_by) if created_by else 0
+        except (ValueError, TypeError):
+            created_by_int = 0
 
         return Certificate(
             id=str(db_certificate.id),
@@ -341,7 +350,7 @@ class CertificateService:
             valid_to=db_certificate.valid_to,
             users_count=db_certificate.users_count,
             created_at=db_certificate.created_at,
-            created_by=int(db_certificate.created_by),
+            created_by=created_by_int,
             is_active=is_active
         )
 

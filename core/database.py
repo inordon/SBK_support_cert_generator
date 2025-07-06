@@ -38,7 +38,7 @@ class Certificate(Base):
     # Метаданные
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_by = Column(String(20), nullable=False)  # Telegram user ID как строка
-    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    is_active = Column(Boolean, default=True, server_default=text('true'), nullable=False, index=True)
 
     # Индексы для оптимизации поиска
     __table_args__ = (
