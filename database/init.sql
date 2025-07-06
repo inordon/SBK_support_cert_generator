@@ -227,32 +227,31 @@ COMMENT ON COLUMN certificate_history.performed_by IS 'ID пользовател
 COMMENT ON COLUMN certificate_history.details IS 'Дополнительные детали действия в формате JSON';
 
 -- Примеры запросов для работы с данными
-/*
+
 -- Получение активных сертификатов для домена
-SELECT * FROM active_certificates WHERE domain = 'example.com';
+-- SELECT * FROM active_certificates WHERE domain = 'example.com';
 
 -- Получение истории действий с сертификатом
-SELECT * FROM certificate_history
-WHERE certificate_id = 'ABCD1-XYZ12-QWRT5-WX0124'
-ORDER BY performed_at DESC;
+-- SELECT * FROM certificate_history
+-- WHERE certificate_id = 'ABCD1-XYZ12-QWRT5-WX0124'
+-- ORDER BY performed_at DESC;
 
 -- Поиск сертификатов по части домена
-SELECT * FROM certificates
-WHERE domain % 'example'
-ORDER BY similarity(domain, 'example') DESC;
+-- SELECT * FROM certificates
+-- WHERE domain LIKE '%example%'
+-- ORDER BY created_at DESC;
 
 -- Статистика по сертификатам
-SELECT * FROM get_certificate_stats();
+-- SELECT * FROM get_certificate_stats();
 
 -- Сертификаты, истекающие в ближайшие 30 дней
-SELECT certificate_id, domain, valid_to, days_until_expiry
-FROM active_certificates
-WHERE days_until_expiry <= 30 AND days_until_expiry > 0
-ORDER BY days_until_expiry;
+-- SELECT certificate_id, domain, valid_to, days_until_expiry
+-- FROM active_certificates
+-- WHERE days_until_expiry <= 30 AND days_until_expiry > 0
+-- ORDER BY days_until_expiry;
 
 -- Очистка старой истории (старше года)
-SELECT cleanup_old_history(365);
-*/),
+-- SELECT cleanup_old_history(365);),
     CONSTRAINT chk_domain_format
         CHECK (domain ~ '^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*
 
