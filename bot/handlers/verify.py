@@ -1,5 +1,5 @@
 """
-Обработчики команд для проверки и поиска сертификатов.
+Обработчики команд для проверки и поиска сертификатов - исправленная версия.
 """
 
 import logging
@@ -57,10 +57,9 @@ async def process_certificate_verification(message: Message, state: FSMContext, 
 
         if certificate is None:
             await message.answer(
-                f"❌ Сертификат с ID `{certificate_id}` не найден.\n\n"
+                f"❌ Сертификат с ID {certificate_id} не найден.\n\n"
                 "Проверьте правильность ввода ID и повторите попытку:",
-                reply_markup=get_cancel_keyboard(),
-                parse_mode="Markdown"
+                reply_markup=get_cancel_keyboard()
             )
             return
 
@@ -91,8 +90,7 @@ async def process_certificate_verification(message: Message, state: FSMContext, 
 
         await message.answer(
             response_text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
 
         await state.clear()
@@ -197,7 +195,7 @@ async def process_domain_search(message: Message, state: FSMContext, user_permis
                 result_text += f"Остальные сертификаты:\n{remaining_list}"
 
             keyboard = get_main_menu_admin() if user_permissions['is_admin'] else get_main_menu_verify()
-            await message.answer(result_text, reply_markup=keyboard, parse_mode="Markdown")
+            await message.answer(result_text, reply_markup=keyboard)
 
         await state.clear()
 
@@ -256,7 +254,7 @@ async def process_inn_search(message: Message, state: FSMContext, user_permissio
                 result_text += f"Остальные сертификаты:\n{remaining_list}"
 
             keyboard = get_main_menu_admin() if user_permissions['is_admin'] else get_main_menu_verify()
-            await message.answer(result_text, reply_markup=keyboard, parse_mode="Markdown")
+            await message.answer(result_text, reply_markup=keyboard)
 
         await state.clear()
 

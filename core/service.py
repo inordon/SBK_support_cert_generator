@@ -283,14 +283,16 @@ class CertificateService:
         elif certificate.is_expired:
             info.append("⚠️ Статус: Истек")
         elif certificate.days_left <= 30:
-            info.append(f"⚠️ Статус: Истекает через {certificate.days_left} дн.")
+            info.append(f"⚠️ Статус: Истекает через {certificate.days_left} дн")
         else:
-            info.append(f"✅ Статус: Активен ({certificate.days_left} дн. до истечения)")
+            info.append(f"✅ Статус: Активен ({certificate.days_left} дн до истечения)")
 
         if detailed:
+            # Безопасно обрабатываем имя создателя
+            creator_name = certificate.creator_display_name or f"ID: {certificate.created_by}"
             info.extend([
                 f"📝 Создан: {certificate.created_at.strftime('%d.%m.%Y %H:%M')}",
-                f"👤 Создатель: {certificate.creator_display_name}"
+                f"👤 Создатель: {creator_name}"
             ])
 
         return "\n".join(info)

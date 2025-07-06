@@ -358,9 +358,13 @@ async def process_confirmation(message: Message, state: FSMContext):
 
         # Форматируем информацию о созданном сертификате
         cert_info = certificate_service.format_certificate_info(certificate, detailed=True)
+        logger.info(f"Форматированная информация: {cert_info}")
+
+        success_message = f"✅ Сертификат успешно создан!\n\n{cert_info}"
+        logger.info(f"Итоговое сообщение: {success_message}")
 
         await message.answer(
-            f"✅ Сертификат успешно создан!\n\n{cert_info}",
+            success_message,
             reply_markup=get_main_menu_admin()
         )
 
