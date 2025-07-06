@@ -1,31 +1,21 @@
 # requirements.txt
-# Основные зависимости
+# Основные зависимости (исправлены конфликты версий)
 asyncpg==0.29.0
 aiogram==3.4.1
 fastapi==0.110.0
 uvicorn[standard]==0.27.1
-pydantic==2.6.3
+pydantic>=2.4.1,<2.6
 python-multipart==0.0.9
 
 # Дополнительные зависимости
 redis==5.0.1
 psycopg2-binary==2.9.9
-sqlalchemy==2.0.27
-alembic==1.13.1
 
 # Утилиты
 python-dotenv==1.0.1
 click==8.1.7
-rich==13.7.0
 
-# Тестирование
+# Тестирование (только базовые для запуска)
 pytest==8.0.2
 pytest-asyncio==0.23.5
-pytest-mock==3.12.0
 httpx==0.27.0
-
-# Безопасность
-cryptography==42.0.4
-
-# Мониторинг
-prometheus-client==0.20.0
