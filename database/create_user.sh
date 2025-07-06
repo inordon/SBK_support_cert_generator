@@ -1,10 +1,10 @@
 #!/bin/bash
-# create_user.sh
-# Скрипт для создания пользователя cert_app с паролем из переменной окружения
+# database/create_user.sh
+# Скрипт для создания пользователя cert_app после создания схемы
 
 set -e
 
-echo "Creating user cert_app..."
+echo "Creating application user cert_app..."
 
 # Проверяем, что переменная CERT_APP_PASSWORD задана
 if [ -z "$CERT_APP_PASSWORD" ]; then
@@ -14,8 +14,18 @@ fi
 
 # Создаем пользователя cert_app с паролем и правами
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    -- Создание пользователя cert_app
-    CREATE USER cert_app WITH PASSWORD '$CERT_APP_PASSWORD';
+    -- Проверяем, существует ли пользователь
+    DO \$\$
+    BEGIN
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'cert_app') THEN
+            -- Создание пользователя cert_app
+            CREATE USER cert_app WITH PASSWORD '$CERT_APP_PASSWORD';
+            RAISE NOTICE 'User cert_app created';
+        ELSE
+            RAISE NOTICE 'User cert_app already exists';
+        END IF;
+    END
+    \$\$;
 
     -- Предоставление прав на схему certificates
     GRANT USAGE ON SCHEMA certificates TO cert_app;
@@ -32,7 +42,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     GRANT USAGE ON ALL SEQUENCES IN SCHEMA certificates TO cert_app;
 
     -- Проверка создания пользователя
-    SELECT 'User cert_app created successfully' as result;
+    SELECT 'User cert_app configured successfully' as result;
 EOSQL
 
 echo "User cert_app created successfully with all necessary permissions."
