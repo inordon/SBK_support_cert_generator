@@ -9,7 +9,7 @@ from .models import Certificate, CertificateRequest, SearchRequest
 from .database import get_certificate_repo, Certificate as DBCertificate
 from .storage import get_storage_manager
 from .generator import CertificateIDGenerator
-from .validator import DataValidator
+from .validators import DataValidator
 from .exceptions import *
 
 # Настройка логирования

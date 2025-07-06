@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from core.service import get_certificate_service
 from core.models import CertificateRequest
 from core.exceptions import *
-from core.validator import PeriodValidator
+from core.validators import PeriodValidator
 from ..states import CreateCertificateStates
 from ..keyboards import (
     get_main_menu_admin, get_period_presets_keyboard, get_users_count_presets_keyboard,

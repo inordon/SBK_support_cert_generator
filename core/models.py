@@ -20,7 +20,7 @@ class CertificateRequest(BaseModel):
     @validator('domain')
     def validate_domain(cls, v):
         """Валидация доменного имени."""
-        from .validator import DomainValidator
+        from .validators import DomainValidator
         validator = DomainValidator()
         if not validator.validate(v):
             raise DomainValidationError(f"Некорректный домен: {v}")
@@ -29,7 +29,7 @@ class CertificateRequest(BaseModel):
     @validator('inn')
     def validate_inn(cls, v):
         """Валидация ИНН."""
-        from .validator import INNValidator
+        from .validators import INNValidator
         validator = INNValidator()
         if not validator.validate(v):
             raise INNValidationError(f"Некорректный ИНН: {v}")
@@ -57,7 +57,7 @@ class CertificateRequest(BaseModel):
 
     class Config:
         """Конфигурация модели."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "domain": "example.com",
                 "inn": "1234567890",
@@ -114,8 +114,8 @@ class Certificate(BaseModel):
 
     class Config:
         """Конфигурация модели."""
-        orm_mode = True
-        schema_extra = {
+        from_attributes = True
+        json_schema_extra = {
             "example": {
                 "certificate_id": "A7K9M-X3P2R-Q8W1E-RT0524",
                 "domain": "example.com",
@@ -141,7 +141,7 @@ class CertificateHistory(BaseModel):
 
     class Config:
         """Конфигурация модели."""
-        orm_mode = True
+        from_attributes = True
 
 
 class SearchRequest(BaseModel):
@@ -160,7 +160,7 @@ class SearchRequest(BaseModel):
 
     class Config:
         """Конфигурация модели."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "domain": "example.com",
                 "inn": "1234567890",
