@@ -71,11 +71,6 @@ class CertificateService:
             # Сохраняем в БД
             db_certificate = self.certificate_repo.create_certificate(db_certificate_data)
 
-            # Логируем данные объекта из БД для отладки
-            logger.info(f"Данные из БД: id={getattr(db_certificate, 'id', 'None')}, "
-                        f"is_active={getattr(db_certificate, 'is_active', 'None')}, "
-                        f"created_at={getattr(db_certificate, 'created_at', 'None')}")
-
             # Создаем Pydantic модель для возврата из данных БД
             certificate = self._convert_db_to_pydantic(db_certificate)
 

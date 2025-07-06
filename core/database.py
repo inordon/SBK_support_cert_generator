@@ -187,21 +187,42 @@ class CertificateRepository:
             session.add(certificate)
             session.commit()
 
+            # Сохраняем все данные в переменные ДО закрытия сессии
+            cert_id = certificate.id
+            cert_certificate_id = certificate.certificate_id
+            cert_domain = certificate.domain
+            cert_inn = certificate.inn
+            cert_valid_from = certificate.valid_from
+            cert_valid_to = certificate.valid_to
+            cert_users_count = certificate.users_count
+            cert_created_at = certificate.created_at
+            cert_created_by = certificate.created_by
+            cert_is_active = certificate.is_active
+
             # Добавляем запись в историю
             self._add_history_record(
                 session,
-                certificate.certificate_id,
+                cert_certificate_id,
                 "created",
-                certificate.created_by,
-                {"domain": certificate.domain, "inn": certificate.inn}
+                cert_created_by,
+                {"domain": cert_domain, "inn": cert_inn}
             )
             session.commit()
 
-            # Возвращаем объект с актуальными данными
-            # Используем expunge чтобы объект можно было использовать вне сессии
-            session.expunge(certificate)
+        # Создаем новый объект Certificate ВНЕ контекста сессии
+        new_certificate = Certificate()
+        new_certificate.id = cert_id
+        new_certificate.certificate_id = cert_certificate_id
+        new_certificate.domain = cert_domain
+        new_certificate.inn = cert_inn
+        new_certificate.valid_from = cert_valid_from
+        new_certificate.valid_to = cert_valid_to
+        new_certificate.users_count = cert_users_count
+        new_certificate.created_at = cert_created_at
+        new_certificate.created_by = cert_created_by
+        new_certificate.is_active = cert_is_active
 
-            return certificate
+        return new_certificate
 
     def get_certificate_by_id(self, certificate_id: str) -> Optional[Certificate]:
         """
