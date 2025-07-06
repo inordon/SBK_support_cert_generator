@@ -214,17 +214,28 @@ COMMENT ON COLUMN certificate_history.performed_by IS 'ID пользовател
 COMMENT ON COLUMN certificate_history.details IS 'Дополнительные детали действия в формате JSON';
 
 -- Создание пользователя приложения ПОСЛЕ создания всех таблиц
-DO $
+DO $$
 DECLARE
-app_password TEXT := coalesce(current_setting('app.cert_app_password', true), getenv('CERT_APP_PASSWORD'), 'defaultpass123');
+app_password TEXT;
 BEGIN
+    -- Получаем пароль из переменной окружения
+    app_password := current_setting('CERT_APP_PASSWORD', true);
+
+    -- Если переменная не установлена, используем дефолтный пароль
+    IF app_password IS NULL THEN
+        app_password := 'defaultpass123';
+        RAISE NOTICE 'CERT_APP_PASSWORD not set, using default password';
+END IF;
+
     -- Проверяем, существует ли пользователь
     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'cert_app') THEN
         -- Создание пользователя cert_app
         EXECUTE format('CREATE USER cert_app WITH PASSWORD %L', app_password);
         RAISE NOTICE 'User cert_app created';
 ELSE
-        RAISE NOTICE 'User cert_app already exists';
+        -- Обновляем пароль для существующего пользователя
+        EXECUTE format('ALTER USER cert_app WITH PASSWORD %L', app_password);
+        RAISE NOTICE 'User cert_app password updated';
 END IF;
 
     -- Предоставление прав на схему certificates
@@ -244,17 +255,7 @@ GRANT USAGE ON ALL SEQUENCES IN SCHEMA certificates TO cert_app;
     RAISE NOTICE 'User cert_app configured successfully';
 EXCEPTION
     WHEN OTHERS THEN
-        RAISE NOTICE 'Error creating user cert_app: %', SQLERRM;
-        -- Создаем с дефолтным паролем если что-то не так
-        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'cert_app') THEN
-            CREATE USER cert_app WITH PASSWORD 'defaultpass123';
-            GRANT USAGE ON SCHEMA certificates TO cert_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON certificates TO cert_app;
-GRANT SELECT, INSERT ON certificate_history TO cert_app;
-GRANT SELECT ON active_certificates TO cert_app;
-GRANT SELECT ON certificates_with_history TO cert_app;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA certificates TO cert_app;
-            RAISE NOTICE 'User cert_app created with default password';
-END IF;
+        RAISE NOTICE 'Error configuring user cert_app: %', SQLERRM;
+        -- Не прерываем выполнение, просто логируем ошибку
 END
-$;
+$$;
