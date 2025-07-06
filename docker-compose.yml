@@ -34,6 +34,7 @@ services:
       dockerfile: Dockerfile
     container_name: certificate_bot
     restart: unless-stopped
+    user: "0:0"  # Запуск от root для решения проблем с правами
     environment:
       # Telegram
       BOT_TOKEN: ${BOT_TOKEN}
