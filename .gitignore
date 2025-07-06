@@ -1,0 +1,426 @@
+# .gitignore для Certificate Management System
+
+# ============================================================================
+# IntelliJ IDEA / PyCharm
+# ============================================================================
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+
+# User-specific stuff
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+
+# AWS User-specific
+.idea/**/aws.xml
+
+# Generated files
+.idea/**/contentModel.xml
+
+# Sensitive or high-churn files
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/dbnavigator.xml
+
+# ============================================================================
+# Python
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# ============================================================================
+# Конфиденциальная информация
+# ============================================================================
+# Основные конфиги с секретами
+.env
+.env.local
+.env.production
+.env.development
+.env.staging
+
+# Переменные окружения
+*.env
+.environment
+
+# Файлы с токенами и ключами
+**/secrets/
+**/secret/
+**/*secret*
+**/*token*
+**/*key*
+*.pem
+*.key
+*.p12
+*.pfx
+config/secrets.yml
+config/database.yml
+
+# ============================================================================
+# База данных
+# ============================================================================
+# SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# PostgreSQL dumps
+*.dump
+*.sql.gz
+backup.sql
+dump.sql
+
+# Database backups
+db_backup/
+database_backups/
+backups/
+
+# ============================================================================
+# Логи
+# ============================================================================
+logs/
+*.log
+*.log.*
+log/
+log.*
+*.out
+
+# Rotated logs
+*.log.1
+*.log.2
+*.log.gz
+
+# Application specific logs
+bot.log
+api.log
+certificates.log
+app.log
+debug.log
+error.log
+access.log
+
+# ============================================================================
+# Сертификаты и файловое хранилище
+# ============================================================================
+# Основная директория с сертификатами (рабочие данные)
+certificates/
+cert_storage/
+data/certificates/
+
+# Тестовые сертификаты
+test_certificates/
+temp_certificates/
+tmp_certificates/
+
+# Бэкапы сертификатов
+certificates_backup/
+*.tar.gz
+*.zip
+
+# ============================================================================
+# Docker
+# ============================================================================
+# Docker volumes data
+docker_data/
+postgres_data/
+redis_data/
+
+# Docker override files
+docker-compose.override.yml
+docker-compose.local.yml
+docker-compose.dev.yml
+
+# ============================================================================
+# Временные и кэш файлы
+# ============================================================================
+# Временные файлы
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Cache directories
+.cache/
+cache/
+__pycache__/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ============================================================================
+# Тестирование
+# ============================================================================
+# Coverage reports
+.coverage
+.coverage.*
+htmlcov/
+coverage_html_report/
+
+# Test databases
+test.db
+test.sqlite
+test_*.db
+
+# Temporary test files
+test_output/
+test_results/
+pytest_cache/
+
+# ============================================================================
+# Конфигурации IDE и редакторов
+# ============================================================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+.vim/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ============================================================================
+# Мониторинг и метрики
+# ============================================================================
+# Prometheus metrics
+metrics/
+prometheus_data/
+
+# Health check files
+health_check.tmp
+health.txt
+
+# ============================================================================
+# SSL сертификаты и безопасность
+# ============================================================================
+# SSL certificates
+ssl/
+certs/
+*.crt
+*.cert
+*.ca-bundle
+*.cer
+*.p7b
+*.p7s
+
+# GPG keys
+*.gpg
+*.asc
+
+# ============================================================================
+# Развертывание и CI/CD
+# ============================================================================
+# Deployment scripts with secrets
+deploy_prod.sh
+deploy_with_secrets.sh
+
+# Kubernetes secrets
+*-secret.yaml
+*-secrets.yaml
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Ansible
+*.retry
+
+# ============================================================================
+# Документация (сгенерированная)
+# ============================================================================
+# Auto-generated docs
+docs/build/
+docs/_build/
+site/
+
+# API documentation
+api_docs/
+openapi.json
+swagger.json
+
+# ============================================================================
+# Специфично для проекта
+# ============================================================================
+# Рабочие файлы разработчика
+notes.txt
+todo.txt
+README_dev.md
+
+# Локальные скрипты
+local_*.py
+dev_*.py
+test_local.py
+
+# Временные файлы разработки
+playground/
+sandbox/
+experiments/
+
+# Данные для тестирования
+test_data/
+sample_data/
+mock_data/
+
+# ============================================================================
+# Добавьте сюда проектно-специфичные файлы
+# ============================================================================
+
+# Примеры файлов, которые стоит НЕ игнорировать:
+# !.env.example
+# !docker-compose.yml
+# !requirements.txt
+# !README.md
+
+# Финальная строка - всегда оставляйте пустую строку в конце
