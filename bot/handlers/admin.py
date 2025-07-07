@@ -372,6 +372,9 @@ async def process_confirmation(message: Message, state: FSMContext):
         try:
             # Проверяем, настроена ли группа для уведомлений
             if settings.notification_group and settings.notification_group != 0:
+                # Получаем статус для красивого отображения
+                status = certificate.status_info
+
                 notification_text = (
                     f"🆕 Создан новый сертификат\n\n"
                     f"🆔 ID: {certificate.certificate_id}\n"
@@ -379,6 +382,7 @@ async def process_confirmation(message: Message, state: FSMContext):
                     f"🏢 ИНН: {certificate.inn}\n"
                     f"📅 Период: {certificate.validity_period}\n"
                     f"👥 Пользователей: {certificate.users_count}\n"
+                    f"{status['emoji']} Статус: {status['text']}\n"
                     f"👤 Создатель: {certificate.creator_display_name}"
                 )
 

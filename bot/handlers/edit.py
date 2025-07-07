@@ -232,11 +232,17 @@ async def process_edit_confirmation(message: Message, state: FSMContext):
             settings = get_settings()
 
             if settings.notification_group and settings.notification_group != 0:
+                # Получаем статус для красивого отображения
+                status = updated_certificate.status_info
+
                 notification_text = (
                     f"📝 Изменены даты сертификата\n\n"
                     f"🆔 ID: {updated_certificate.certificate_id}\n"
                     f"🌐 Домен: {updated_certificate.domain}\n"
+                    f"🏢 ИНН: {updated_certificate.inn}\n"
                     f"📅 Новый период: {updated_certificate.validity_period}\n"
+                    f"👥 Пользователей: {updated_certificate.users_count}\n"
+                    f"{status['emoji']} Статус: {status['text']}\n"
                     f"👤 Изменено: {updated_certificate.creator_display_name}"
                 )
 
