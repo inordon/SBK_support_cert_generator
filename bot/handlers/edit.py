@@ -1,5 +1,5 @@
 """
-Обработчики команд для редактирования сертификатов.
+Обработчики команд для редактирования сертификатов - исправленная версия.
 """
 
 import logging
@@ -81,18 +81,18 @@ async def process_certificate_id_for_edit(message: Message, state: FSMContext):
         dates_instruction = """
 📅 Введите новые даты действия сертификата в формате:
 
-**ДД.ММ.ГГГГ-ДД.ММ.ГГГГ**
+ДД.ММ.ГГГГ-ДД.ММ.ГГГГ
 
 Примеры:
-• `01.01.2025-31.12.2025`
-• `15.06.2024-14.06.2026`
+• 01.01.2025-31.12.2025
+• 15.06.2024-14.06.2026
 
 Или введите "отменить" для возврата в главное меню."""
 
+        # Отправляем БЕЗ parse_mode, чтобы избежать проблем с Markdown
         await message.answer(
             f"📋 Найден сертификат:\n\n{cert_info}\n\n{dates_instruction}",
-            reply_markup=get_cancel_keyboard(),
-            parse_mode="Markdown"
+            reply_markup=get_cancel_keyboard()
         )
 
         await state.set_state(EditCertificateStates.waiting_for_new_dates)
@@ -155,17 +155,17 @@ async def process_new_dates(message: Message, state: FSMContext):
 
         confirmation_text = f"""📝 Подтвердите изменение дат сертификата:
 
-🆔 **ID:** {certificate_id}
-🌐 **Домен:** {original_certificate.domain}
+🆔 ID: {certificate_id}
+🌐 Домен: {original_certificate.domain}
 
 {comparison_text}
 
-⚠️ **Внимание:** После подтверждения изменения нельзя будет отменить!"""
+⚠️ Внимание: После подтверждения изменения нельзя будет отменить!"""
 
+        # Отправляем БЕЗ parse_mode
         await message.answer(
             confirmation_text,
-            reply_markup=get_edit_confirmation_keyboard(),
-            parse_mode="Markdown"
+            reply_markup=get_edit_confirmation_keyboard()
         )
 
         await state.set_state(EditCertificateStates.waiting_for_edit_confirmation)
@@ -332,7 +332,7 @@ def validate_new_dates(valid_from: date, valid_to: date) -> list[str]:
 
 def format_dates_comparison(old_from: date, old_to: date, new_from: date, new_to: date) -> str:
     """
-    Форматирует сравнение старых и новых дат.
+    Форматирует сравнение старых и новых дат БЕЗ Markdown разметки.
 
     Args:
         old_from: Старая дата начала
@@ -346,11 +346,11 @@ def format_dates_comparison(old_from: date, old_to: date, new_from: date, new_to
     old_period = f"{old_from.strftime('%d.%m.%Y')}-{old_to.strftime('%d.%m.%Y')}"
     new_period = f"{new_from.strftime('%d.%m.%Y')}-{new_to.strftime('%d.%m.%Y')}"
 
-    return f"""📅 **Изменение периода действия:**
+    return f"""📅 Изменение периода действия:
 
-❌ **Было:** {old_period}
-✅ **Будет:** {new_period}
+❌ Было: {old_period}
+✅ Будет: {new_period}
 
-📊 **Детали изменений:**
+📊 Детали изменений:
 • Начало: {old_from.strftime('%d.%m.%Y')} → {new_from.strftime('%d.%m.%Y')}
 • Окончание: {old_to.strftime('%d.%m.%Y')} → {new_to.strftime('%d.%m.%Y')}"""
