@@ -59,7 +59,13 @@ class AccessMiddleware(BaseMiddleware):
             return None
 
         # Только в личных сообщениях проверяем права доступа
-        if not self.settings.is_allowed_user(user_id):
+        is_allowed = self.settings.is_allowed_user(user_id)
+        is_admin = self.settings.is_admin(user_id)
+        is_verify = self.settings.is_verify_user(user_id)
+
+        logger.debug(f"Пользователь {user_id}: allowed={is_allowed}, admin={is_admin}, verify={is_verify}")
+
+        if not is_allowed:
             logger.warning(f"Попытка несанкционированного доступа от пользователя {user_id}")
 
             # Отправляем сообщение о запрете доступа только в личных сообщениях
@@ -78,8 +84,8 @@ class AccessMiddleware(BaseMiddleware):
 
         # Добавляем информацию о правах пользователя в данные
         data['user_permissions'] = {
-            'is_admin': self.settings.is_admin(user_id),
-            'can_verify': self.settings.is_verify_user(user_id),
+            'is_admin': is_admin,
+            'can_verify': is_verify,
             'user_id': user_id,
             'chat_type': chat_type
         }
