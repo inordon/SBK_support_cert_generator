@@ -95,9 +95,23 @@ class Settings(BaseSettings):
             raise ValueError("Список пользователей не может быть пустым")
 
         try:
-            user_ids = [int(user_id.strip()) for user_id in v.split(",") if user_id.strip()]
+            user_ids = []
+            for user_id_str in v.split(","):
+                user_id_str = user_id_str.strip()
+                if user_id_str:
+                    user_id = int(user_id_str)
+                    # Проверяем, что ID достаточно длинный для Telegram
+                    if user_id < 100000:  # Минимальный валидный Telegram ID
+                        print(f"⚠️  Подозрительно короткий Telegram ID: {user_id}")
+                    user_ids.append(user_id)
+
             if not user_ids:
                 raise ValueError("Не найдено корректных ID пользователей")
+
+            print(f"✅ Распознано пользователей: {len(user_ids)}")
+            for uid in user_ids:
+                print(f"  - {uid}")
+
             return v
         except ValueError as e:
             raise ValueError(f"Некорректные ID пользователей: {e}")

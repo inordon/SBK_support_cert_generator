@@ -63,10 +63,19 @@ class AccessMiddleware(BaseMiddleware):
         is_admin = self.settings.is_admin(user_id)
         is_verify = self.settings.is_verify_user(user_id)
 
-        logger.debug(f"Пользователь {user_id}: allowed={is_allowed}, admin={is_admin}, verify={is_verify}")
+        # Детальная отладка
+        admin_users = self.settings.admin_users_set
+        verify_users = self.settings.verify_users_set
+        all_users = self.settings.all_allowed_users
+
+        logger.info(f"Пользователь {user_id}: allowed={is_allowed}, admin={is_admin}, verify={is_verify}")
+        logger.info(f"Админы: {admin_users}")
+        logger.info(f"Проверяющие: {verify_users}")
+        logger.info(f"Все разрешенные: {all_users}")
 
         if not is_allowed:
-            logger.warning(f"Попытка несанкционированного доступа от пользователя {user_id}")
+            logger.warning(f"ОТКАЗ В ДОСТУПЕ для пользователя {user_id}")
+            logger.warning(f"Пользователь НЕ найден в списках: админы={admin_users}, проверяющие={verify_users}")
 
             # Отправляем сообщение о запрете доступа только в личных сообщениях
             if isinstance(event, Message) and chat_type == 'private':
