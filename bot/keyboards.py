@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 def get_main_menu_admin() -> ReplyKeyboardMarkup:
     """
-    Главное меню для администраторов.
+    Главное меню для администраторов с кнопкой редактирования.
 
     Returns:
         ReplyKeyboardMarkup: Клавиатура главного меню
@@ -27,8 +27,9 @@ def get_main_menu_admin() -> ReplyKeyboardMarkup:
         KeyboardButton(text="🔎 Поиск")
     )
 
-    # Третий ряд - справка
+    # Третий ряд - редактирование и справка
     builder.row(
+        KeyboardButton(text="✏️ Редактировать сертификат"),
         KeyboardButton(text="❓ Справка")
     )
 
@@ -177,6 +178,23 @@ def get_confirmation_keyboard() -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
 
 
+def get_edit_confirmation_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Клавиатура подтверждения редактирования.
+
+    Returns:
+        ReplyKeyboardMarkup: Клавиатура подтверждения редактирования
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="✅ Подтвердить изменения"),
+        KeyboardButton(text="❌ Отменить изменения")
+    )
+
+    return builder.as_markup(resize_keyboard=True, one_time_keyboard=False)
+
+
 def get_duplicate_confirmation_keyboard() -> ReplyKeyboardMarkup:
     """
     Клавиатура подтверждения при наличии дубликатов.
@@ -247,6 +265,10 @@ class ButtonTexts:
     SEARCH = "🔎 Поиск"
     HELP = "❓ Справка"
 
+    # Редактирование
+    EDIT_CERTIFICATE = "✏️ Редактировать сертификат"
+    EDIT_DATES = "📅 Изменить даты"
+
     # Поиск
     SEARCH_BY_DOMAIN = "🌐 По домену"
     SEARCH_BY_INN = "🏢 По ИНН"
@@ -277,6 +299,10 @@ class ButtonTexts:
     CANCEL = "❌ Отменить"
     YES_CREATE = "✅ Да, создать"
     NO_CANCEL = "❌ Нет, отменить"
+
+    # Подтверждение редактирования
+    CONFIRM_EDIT = "✅ Подтвердить изменения"
+    CANCEL_EDIT = "❌ Отменить изменения"
 
     # Навигация
     BACK = "🔙 Назад"

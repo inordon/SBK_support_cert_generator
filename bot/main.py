@@ -1,5 +1,5 @@
 """
-Основной файл для запуска Telegram бота - исправленная версия.
+Основной файл для запуска Telegram бота - обновленная версия.
 """
 
 import asyncio
@@ -19,7 +19,7 @@ from aiogram.enums import ParseMode
 from config.settings import get_settings, validate_settings
 from core.database import get_db_manager
 from .middleware import setup_middlewares
-from .handlers import common, admin, verify
+from .handlers import common, admin, verify, edit
 
 # Функция для безопасной настройки логирования
 def setup_logging():
@@ -95,6 +95,9 @@ def setup_handlers(dp: Dispatcher):
 
     # Обработчики для администраторов (создание сертификатов)
     dp.include_router(admin.router)
+
+    # Обработчики для редактирования сертификатов (только для админов)
+    dp.include_router(edit.router)
 
     # Обработчики для проверки сертификатов
     dp.include_router(verify.router)

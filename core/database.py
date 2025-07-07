@@ -1,4 +1,4 @@
-# core/database.py - критические исправления
+# core/database.py - обновленная версия с методом редактирования дат
 
 """
 Модели SQLAlchemy для работы с базой данных.
@@ -61,7 +61,13 @@ class Certificate(Base):
     @property
     def days_left(self) -> int:
         """Возвращает количество дней до истечения срока действия."""
-        return (self.valid_to - date.today()).days
+        today = date.today()
+        if today < self.valid_from:
+            return 0  # Еще не начал действовать
+        elif today > self.valid_to:
+            return 0  # Уже истек
+        else:
+            return (self.valid_to - today).days
 
     @property
     def validity_period(self) -> str:
@@ -94,7 +100,7 @@ class CertificateHistory(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     certificate_id = Column(String(23), nullable=False, index=True)
-    action = Column(String(50), nullable=False)  # 'created', 'verified', 'deactivated', etc.
+    action = Column(String(50), nullable=False)  # 'created', 'verified', 'deactivated', 'dates_updated', etc.
     performed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     performed_by = Column(String(20), nullable=False)  # Telegram user ID
     details = Column(JSONB, nullable=True)  # Дополнительная информация в JSON
@@ -340,6 +346,57 @@ class CertificateRepository:
             result = session.query(Certificate.certificate_id).all()
             return {row.certificate_id for row in result}
 
+    def update_certificate_dates(self, certificate_id: str, new_valid_from: date,
+                                 new_valid_to: date, user_id: str, reason: str = None) -> bool:
+        """
+        Обновляет даты действия сертификата.
+
+        Args:
+            certificate_id: ID сертификата
+            new_valid_from: Новая дата начала действия
+            new_valid_to: Новая дата окончания действия
+            user_id: ID пользователя, выполняющего изменение
+            reason: Причина изменения
+
+        Returns:
+            bool: True если обновление прошло успешно
+        """
+        with self.db_manager.get_session() as session:
+            certificate = session.query(Certificate).filter(
+                Certificate.certificate_id == certificate_id
+            ).first()
+
+            if certificate:
+                # Сохраняем старые значения для истории
+                old_valid_from = certificate.valid_from
+                old_valid_to = certificate.valid_to
+
+                # Обновляем даты
+                certificate.valid_from = new_valid_from
+                certificate.valid_to = new_valid_to
+
+                # Добавляем запись в историю
+                details = {
+                    "old_valid_from": old_valid_from.isoformat(),
+                    "old_valid_to": old_valid_to.isoformat(),
+                    "new_valid_from": new_valid_from.isoformat(),
+                    "new_valid_to": new_valid_to.isoformat(),
+                    "reason": reason
+                }
+
+                self._add_history_record(
+                    session,
+                    certificate_id,
+                    "dates_updated",
+                    user_id,
+                    details
+                )
+
+                session.commit()
+                return True
+
+            return False
+
     def deactivate_certificate(self, certificate_id: str, user_id: str) -> bool:
         """
         Деактивирует сертификат.
@@ -430,15 +487,25 @@ class CertificateRepository:
         with self.db_manager.get_session() as session:
             total_certificates = session.query(Certificate).count()
             active_certificates = session.query(Certificate).filter(Certificate.is_active == True).count()
-            expired_certificates = session.query(Certificate).filter(
-                Certificate.valid_to < date.today(),
-                Certificate.is_active == True
-            ).count()
+
+            # Получаем активные сертификаты для дальнейшего анализа
+            active_certs = session.query(Certificate).filter(Certificate.is_active == True).all()
+
+            expired_certificates = 0
+            not_started_certificates = 0
+            today = date.today()
+
+            for cert in active_certs:
+                if cert.valid_to < today:
+                    expired_certificates += 1
+                elif cert.valid_from > today:
+                    not_started_certificates += 1
 
             return {
                 "total_certificates": total_certificates,
                 "active_certificates": active_certificates,
                 "expired_certificates": expired_certificates,
+                "not_started_certificates": not_started_certificates,
                 "inactive_certificates": total_certificates - active_certificates
             }
 

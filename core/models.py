@@ -1,4 +1,4 @@
-# core/models.py - исправленная версия
+# core/models.py - исправленная версия с правильным расчетом статуса
 
 """
 Pydantic модели для валидации и сериализации данных сертификатов.
@@ -127,7 +127,7 @@ class CertificateRequest(BaseModel):
 
 
 class Certificate(BaseModel):
-    """Модель сертификата."""
+    """Модель сертификата с исправленной логикой статуса."""
     id: Optional[str] = None
     certificate_id: str = Field(..., min_length=23, max_length=23, description="ID сертификата")
     domain: str = Field(..., description="Доменное имя")
@@ -147,9 +147,93 @@ class Certificate(BaseModel):
         return f"{self.valid_from.strftime('%d.%m.%Y')}-{self.valid_to.strftime('%d.%m.%Y')}"
 
     @property
+    def status_info(self) -> dict:
+        """Возвращает детальную информацию о статусе сертификата."""
+        today = date.today()
+
+        # Если сертификат деактивирован
+        if not self.is_active:
+            return {
+                "status": "inactive",
+                "emoji": "❌",
+                "text": "Деактивирован",
+                "days_info": "",
+                "is_expired": False,
+                "is_not_started": False,
+                "days_left": 0
+            }
+
+        # Если сертификат еще не начал действовать
+        if today < self.valid_from:
+            days_to_start = (self.valid_from - today).days
+            return {
+                "status": "not_started",
+                "emoji": "⏳",
+                "text": f"Не активен (начнется через {days_to_start} дн)",
+                "days_info": f"начнется через {days_to_start} дн",
+                "is_expired": False,
+                "is_not_started": True,
+                "days_left": 0,
+                "days_to_start": days_to_start
+            }
+
+        # Если срок действия истек
+        if today > self.valid_to:
+            days_expired = (today - self.valid_to).days
+            return {
+                "status": "expired",
+                "emoji": "⚠️",
+                "text": f"Просрочен ({days_expired} дн назад)",
+                "days_info": f"истек {days_expired} дн назад",
+                "is_expired": True,
+                "is_not_started": False,
+                "days_left": 0,
+                "days_expired": days_expired
+            }
+
+        # Сертификат активен - считаем дни до окончания
+        days_left = (self.valid_to - today).days
+
+        if days_left <= 7:
+            return {
+                "status": "expiring_very_soon",
+                "emoji": "🔴",
+                "text": f"Истекает через {days_left} дн",
+                "days_info": f"{days_left} дн до истечения",
+                "is_expired": False,
+                "is_not_started": False,
+                "days_left": days_left
+            }
+        elif days_left <= 30:
+            return {
+                "status": "expiring_soon",
+                "emoji": "🟡",
+                "text": f"Истекает через {days_left} дн",
+                "days_info": f"{days_left} дн до истечения",
+                "is_expired": False,
+                "is_not_started": False,
+                "days_left": days_left
+            }
+        else:
+            return {
+                "status": "active",
+                "emoji": "✅",
+                "text": f"Активен ({days_left} дн до истечения)",
+                "days_info": f"{days_left} дн до истечения",
+                "is_expired": False,
+                "is_not_started": False,
+                "days_left": days_left
+            }
+
+    @property
     def is_expired(self) -> bool:
         """Проверяет, истек ли срок действия сертификата."""
         return date.today() > self.valid_to
+
+    @property
+    def is_not_started(self) -> bool:
+        """Проверяет, начал ли сертификат действовать."""
+        return date.today() < self.valid_from
 
     @property
     def creator_display_name(self) -> str:
@@ -164,10 +248,17 @@ class Certificate(BaseModel):
     @property
     def days_left(self) -> int:
         """Возвращает количество дней до истечения срока действия."""
-        return (self.valid_to - date.today()).days
+        today = date.today()
+        if today < self.valid_from:
+            return 0  # Еще не начал действовать
+        elif today > self.valid_to:
+            return 0  # Уже истек
+        else:
+            return (self.valid_to - today).days
 
     def to_dict(self) -> dict:
         """Конвертирует объект в словарь для JSON сериализации."""
+        status = self.status_info
         return {
             "certificate_id": self.certificate_id,
             "domain": self.domain,
@@ -177,8 +268,11 @@ class Certificate(BaseModel):
             "created_at": self.created_at.isoformat(),
             "created_by": str(self.created_by),
             "is_active": self.is_active,
-            "is_expired": self.is_expired,
-            "days_left": self.days_left
+            "status": status["status"],
+            "status_text": status["text"],
+            "is_expired": status["is_expired"],
+            "is_not_started": status["is_not_started"],
+            "days_left": status["days_left"]
         }
 
     class Config:
@@ -195,6 +289,41 @@ class Certificate(BaseModel):
                 "created_at": "2024-01-01T10:00:00",
                 "created_by": 123456789,
                 "is_active": True
+            }
+        }
+
+
+class EditCertificateDatesRequest(BaseModel):
+    """Модель запроса на редактирование дат сертификата."""
+    certificate_id: str = Field(..., description="ID сертификата")
+    new_valid_from: date = Field(..., description="Новая дата начала действия")
+    new_valid_to: date = Field(..., description="Новая дата окончания действия")
+    edited_by: int = Field(..., description="Telegram ID редактора")
+    edit_reason: Optional[str] = Field(None, description="Причина редактирования")
+
+    @validator('new_valid_to')
+    def validate_dates(cls, v, values):
+        """Валидация дат."""
+        if 'new_valid_from' in values:
+            if v <= values['new_valid_from']:
+                raise ValueError("Дата окончания должна быть позже даты начала")
+
+            # Проверяем, что период не превышает 5 лет
+            years_diff = (v - values['new_valid_from']).days / 365.25
+            if years_diff > 5:
+                raise ValueError("Период действия не может превышать 5 лет")
+
+        return v
+
+    class Config:
+        """Конфигурация модели."""
+        json_schema_extra = {
+            "example": {
+                "certificate_id": "A7K9M-X3P2R-Q8W1E-RT0524",
+                "new_valid_from": "2024-01-01",
+                "new_valid_to": "2025-01-01",
+                "edited_by": 123456789,
+                "edit_reason": "Продление срока действия"
             }
         }
 

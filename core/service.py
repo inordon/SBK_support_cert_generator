@@ -1,11 +1,11 @@
 """
-Основная бизнес-логика для работы с сертификатами - исправленная версия.
+Основная бизнес-логика для работы с сертификатами - обновленная версия.
 """
 
 import logging
 from datetime import datetime, date
 from typing import List, Optional, Dict, Tuple
-from .models import Certificate, CertificateRequest, SearchRequest
+from .models import Certificate, CertificateRequest, SearchRequest, EditCertificateDatesRequest
 from .database import get_certificate_repo, Certificate as DBCertificate
 from .storage import get_storage_manager
 from .generator import CertificateIDGenerator
@@ -91,6 +91,60 @@ class CertificateService:
             if isinstance(e, (ValidationError, GenerationError, DatabaseError)):
                 raise
             raise DatabaseError(f"Неожиданная ошибка при создании сертификата: {e}")
+
+    def edit_certificate_dates(self, edit_request: EditCertificateDatesRequest) -> Certificate:
+        """
+        Редактирует даты действия сертификата.
+
+        Args:
+            edit_request: Запрос на редактирование дат
+
+        Returns:
+            Certificate: Обновленный сертификат
+
+        Raises:
+            CertificateNotFoundError: Если сертификат не найден
+            ValidationError: При ошибке валидации
+        """
+        logger.info(f"Редактирование дат сертификата {edit_request.certificate_id} пользователем {edit_request.edited_by}")
+
+        try:
+            # Находим сертификат в БД
+            db_certificate = self.certificate_repo.get_certificate_by_id(edit_request.certificate_id)
+            if not db_certificate:
+                raise CertificateNotFoundError(f"Сертификат {edit_request.certificate_id} не найден")
+
+            # Обновляем даты
+            success = self.certificate_repo.update_certificate_dates(
+                edit_request.certificate_id,
+                edit_request.new_valid_from,
+                edit_request.new_valid_to,
+                str(edit_request.edited_by),
+                edit_request.edit_reason
+            )
+
+            if not success:
+                raise DatabaseError("Не удалось обновить даты сертификата")
+
+            # Получаем обновленный сертификат
+            updated_db_certificate = self.certificate_repo.get_certificate_by_id(edit_request.certificate_id)
+            updated_certificate = self._convert_db_to_pydantic(updated_db_certificate)
+
+            # Обновляем файл сертификата
+            try:
+                self.storage_manager.save_certificate_complete(updated_certificate)
+                logger.info(f"Файл сертификата {edit_request.certificate_id} обновлен")
+            except Exception as e:
+                logger.warning(f"Ошибка обновления файла сертификата: {e}")
+
+            logger.info(f"Даты сертификата {edit_request.certificate_id} успешно обновлены")
+            return updated_certificate
+
+        except Exception as e:
+            logger.error(f"Ошибка редактирования дат сертификата {edit_request.certificate_id}: {e}")
+            if isinstance(e, (CertificateNotFoundError, ValidationError, DatabaseError)):
+                raise
+            raise DatabaseError(f"Неожиданная ошибка при редактировании дат: {e}")
 
     def verify_certificate(self, certificate_id: str, user_id: int) -> Optional[Certificate]:
         """
@@ -260,7 +314,7 @@ class CertificateService:
 
     def format_certificate_info(self, certificate: Certificate, detailed: bool = False) -> str:
         """
-        Форматирует информацию о сертификате для отображения.
+        Форматирует информацию о сертификате для отображения с правильным статусом.
 
         Args:
             certificate: Сертификат
@@ -269,23 +323,16 @@ class CertificateService:
         Returns:
             str: Отформатированная информация
         """
+        status = certificate.status_info
+
         info = [
             f"🆔 ID: {certificate.certificate_id}",
             f"🌐 Домен: {certificate.domain}",
             f"🏢 ИНН: {certificate.inn}",
             f"📅 Период: {certificate.validity_period}",
             f"👥 Пользователей: {certificate.users_count}",
+            f"{status['emoji']} Статус: {status['text']}"
         ]
-
-        # Статус сертификата
-        if not certificate.is_active:
-            info.append("❌ Статус: Неактивен")
-        elif certificate.is_expired:
-            info.append("⚠️ Статус: Истек")
-        elif certificate.days_left <= 30:
-            info.append(f"⚠️ Статус: Истекает через {certificate.days_left} дн")
-        else:
-            info.append(f"✅ Статус: Активен ({certificate.days_left} дн до истечения)")
 
         if detailed:
             # Безопасно обрабатываем имя создателя
@@ -300,7 +347,7 @@ class CertificateService:
     def format_certificates_list(self, certificates: List[Certificate],
                                  max_items: int = 10) -> str:
         """
-        Форматирует список сертификатов для отображения.
+        Форматирует список сертификатов для отображения с правильными статусами.
 
         Args:
             certificates: Список сертификатов
@@ -314,8 +361,22 @@ class CertificateService:
 
         items = []
         for i, cert in enumerate(certificates[:max_items], 1):
-            status = "❌" if not cert.is_active else "⚠️" if cert.is_expired else "✅"
-            items.append(f"{i}. {status} {cert.domain} ({cert.certificate_id})")
+            status = cert.status_info
+            emoji = status['emoji']
+
+            # Краткая информация о статусе
+            if status['status'] == 'not_started':
+                status_text = f"начнется {cert.valid_from.strftime('%d.%m')}"
+            elif status['status'] in ['expired']:
+                status_text = f"истек {cert.valid_to.strftime('%d.%m')}"
+            elif status['status'] in ['expiring_very_soon', 'expiring_soon']:
+                status_text = f"{status['days_left']}д"
+            elif status['status'] == 'active':
+                status_text = f"{status['days_left']}д"
+            else:
+                status_text = "неактивен"
+
+            items.append(f"{i}. {emoji} {cert.domain} ({cert.certificate_id[:11]}...) - {status_text}")
 
         result = "\n".join(items)
 

@@ -1,4 +1,4 @@
-# bot/states.py - обновленная версия
+# bot/states.py - обновленная версия с состояниями редактирования
 
 """
 Состояния FSM (Finite State Machine) для диалогов Telegram бота.
@@ -12,6 +12,14 @@ class CreateCertificateStates(StatesGroup):
 
     waiting_for_certificate_data = State()    # Ожидание всех данных одним сообщением
     waiting_for_confirmation = State()        # Ожидание подтверждения создания
+
+
+class EditCertificateStates(StatesGroup):
+    """Состояния процесса редактирования сертификата."""
+
+    waiting_for_certificate_id = State()      # Ожидание ID сертификата для редактирования
+    waiting_for_new_dates = State()           # Ожидание новых дат действия
+    waiting_for_edit_confirmation = State()   # Ожидание подтверждения изменений
 
 
 class VerifyCertificateStates(StatesGroup):
