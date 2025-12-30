@@ -69,7 +69,10 @@ async def help_command(message: Message, user_permissions: dict):
             "📝 Создание сертификатов:\n"
             "1. Нажмите 'Создать сертификат'\n"
             "2. Введите домен (поддерживаются wildcard: *.example.com)\n"
-            "3. Введите ИНН (10 или 12 цифр)\n"
+#            "3. Введите ИНН (10 или 12 цифр)\n"
+            "3. Введите ИНН/БИН организации:\n"
+                "ИНН РФ: 10 или 12 цифр\n"
+                "БИН Казахстана: 12 цифр"
             "4. Выберите период действия\n"
             "5. Укажите количество пользователей\n"
             "6. Подтвердите создание\n\n"
@@ -200,7 +203,6 @@ async def status_command(message: Message, user_permissions: dict):
             "❌ Не удалось получить статистику системы.",
             reply_markup=get_main_menu_admin()
         )
-
 
 @router.message()
 async def unknown_message(message: Message, user_permissions: dict):

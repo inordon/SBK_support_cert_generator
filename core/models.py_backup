@@ -59,51 +59,37 @@ class CertificateRequest(BaseModel):
 
     @validator('inn')
     def validate_inn(cls, v):
-        """Валидация ИНН (РФ) и БИН (Казахстан)."""
+        """Валидация ИНН."""
         inn = v.strip()
-    
+
         if not inn or not inn.isdigit():
-            raise INNValidationError(f"ИНН/БИН должен содержать только цифры: {inn}")
-    
+            raise INNValidationError(f"ИНН должен содержать только цифры: {inn}")
+
         if len(inn) == 10:
-            # Валидация 10-значного ИНН РФ
+            # Валидация 10-значного ИНН
             coefficients = [2, 4, 10, 3, 5, 9, 4, 6, 8]
             checksum = sum(int(inn[i]) * coefficients[i] for i in range(9))
             control_digit = (checksum % 11) % 10
             if int(inn[9]) != control_digit:
                 raise INNValidationError(f"Некорректная контрольная сумма ИНН: {inn}")
         elif len(inn) == 12:
-            # Сначала пробуем как ИНН РФ
-            try:
-                # Первая контрольная цифра
-                coefficients_1 = [7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
-                checksum_1 = sum(int(inn[i]) * coefficients_1[i] for i in range(10))
-                control_digit_1 = (checksum_1 % 11) % 10
-                
-                # Вторая контрольная цифра
-                coefficients_2 = [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
-                checksum_2 = sum(int(inn[i]) * coefficients_2[i] for i in range(11))
-                control_digit_2 = (checksum_2 % 11) % 10
-                
-                # Если обе контрольные суммы совпадают - это ИНН РФ
-                if int(inn[10]) == control_digit_1 and int(inn[11]) == control_digit_2:
-                    return inn
-            except:
-                pass
-            
-            # Если не прошел как ИНН РФ, проверяем как БИН Казахстана
-            # Формат БИН: ГГММXXXXXX## (12 цифр, где ММ - месяц от 01 до 12)
-            try:
-                month = int(inn[2:4])
-                if month < 1 or month > 12:
-                    raise INNValidationError(f"Некорректный формат ИНН/БИН: {inn}")
-                # БИН принят
-                return inn
-            except ValueError:
-                raise INNValidationError(f"Некорректный формат ИНН/БИН: {inn}")
+            # Валидация 12-значного ИНН
+            # Первая контрольная цифра
+            coefficients_1 = [7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
+            checksum_1 = sum(int(inn[i]) * coefficients_1[i] for i in range(10))
+            control_digit_1 = (checksum_1 % 11) % 10
+            if int(inn[10]) != control_digit_1:
+                raise INNValidationError(f"Некорректная первая контрольная сумма ИНН: {inn}")
+
+            # Вторая контрольная цифра
+            coefficients_2 = [3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]
+            checksum_2 = sum(int(inn[i]) * coefficients_2[i] for i in range(11))
+            control_digit_2 = (checksum_2 % 11) % 10
+            if int(inn[11]) != control_digit_2:
+                raise INNValidationError(f"Некорректная вторая контрольная сумма ИНН: {inn}")
         else:
-            raise INNValidationError(f"ИНН/БИН должен содержать 10 или 12 цифр: {inn}")
-    
+            raise INNValidationError(f"ИНН должен содержать 10 или 12 цифр: {inn}")
+
         return inn
 
     @validator('valid_to')

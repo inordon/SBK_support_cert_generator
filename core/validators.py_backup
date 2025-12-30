@@ -92,26 +92,22 @@ class INNValidator:
 
     def validate(self, inn: str) -> bool:
         """
-        Валидация ИНН (РФ) и БИН (Казахстан).
-    
+        Валидация ИНН с проверкой контрольной суммы.
+
         Args:
-            inn: ИНН/БИН для валидации
-    
+            inn: ИНН для валидации
+
         Returns:
-            bool: True если ИНН/БИН валиден, False иначе
+            bool: True если ИНН валиден, False иначе
         """
         if not inn or not inn.isdigit():
             return False
-    
+
         if len(inn) == 10:
             return self._validate_inn_10(inn)
         elif len(inn) == 12:
-            # Пробуем сначала как ИНН РФ
-            if self._validate_inn_12(inn):
-                return True
-            # Если не прошел как ИНН РФ, проверяем как БИН Казахстана
-            return self._validate_bin_kz(inn)
-    
+            return self._validate_inn_12(inn)
+
         return False
 
     def _validate_inn_10(self, inn: str) -> bool:
@@ -139,31 +135,6 @@ class INNValidator:
         control_digit_2 = (checksum_2 % 11) % 10
 
         return int(inn[11]) == control_digit_2
-
-
-    def _validate_bin_kz(self, bin_kz: str) -> bool:
-        """
-        Валидация БИН Казахстана (упрощенная).
-        Формат БИН: ГГММXXXXXX## (12 цифр)
-        ГГ - год, МM - месяц регистрации
-        
-        Args:
-            bin_kz: БИН для валидации
-            
-        Returns:
-            bool: True если БИН валиден по формату
-        """
-        if len(bin_kz) != 12:
-            return False
-        
-        # Проверяем месяц (позиции 2-3, должно быть от 01 до 12)
-        try:
-            month = int(bin_kz[2:4])
-            if month < 1 or month > 12:
-                return False
-            return True
-        except ValueError:
-            return False
 
 class PeriodValidator:
     """Валидатор периода действия сертификата."""
