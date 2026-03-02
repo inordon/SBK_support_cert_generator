@@ -19,7 +19,7 @@ from aiogram.enums import ParseMode
 from config.settings import get_settings, validate_settings
 from core.database import get_db_manager
 from .middleware import setup_middlewares
-from .handlers import common, admin, verify, edit
+from .handlers import common, admin, verify, edit, group
 
 # Функция для безопасной настройки логирования
 def setup_logging():
@@ -91,15 +91,18 @@ def setup_handlers(dp: Dispatcher):
     Args:
         dp: Диспетчер aiogram
     """
-    # Порядок важен! Сначала специфичные обработчики, потом общие
+    # Порядок важен! Сначала команды (для групп), потом кнопки (для личных чатов)
 
-    # Обработчики для администраторов (создание сертификатов)
+    # Обработчики slash-команд (работают и в группах, и в личных чатах)
+    dp.include_router(group.router)
+
+    # Обработчики для администраторов (создание сертификатов, только личные чаты)
     dp.include_router(admin.router)
 
-    # Обработчики для редактирования сертификатов (только для админов)
+    # Обработчики для редактирования сертификатов (только для админов, только личные чаты)
     dp.include_router(edit.router)
 
-    # Обработчики для проверки сертификатов
+    # Обработчики для проверки сертификатов (кнопки в личных чатах)
     dp.include_router(verify.router)
 
     # Общие обработчики (должны быть последними)
@@ -120,8 +123,12 @@ async def setup_bot_commands(bot: Bot):
     commands = [
         BotCommand(command="start", description="🚀 Запустить бота"),
         BotCommand(command="help", description="❓ Справка по командам"),
+        BotCommand(command="verify", description="🔍 Проверить сертификат по ID"),
+        BotCommand(command="search", description="🔎 Поиск по домену или ИНН"),
+        BotCommand(command="list", description="📋 Список сертификатов"),
+        BotCommand(command="stats", description="📊 Статистика системы"),
+        BotCommand(command="status", description="📊 Статистика системы"),
         BotCommand(command="cancel", description="❌ Отменить текущую операцию"),
-        BotCommand(command="status", description="📊 Статистика (только админы)"),
     ]
 
     await bot.set_my_commands(commands)

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Создать сертификат - SBK Certificate Manager{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Создание нового сертификата</h2>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert alert-success">
+        {{ success }}
+        {% if certificate %}
+        <br><br>
+        <strong>ID:</strong> <span class="cert-id">{{ certificate.certificate_id }}</span><br>
+        <strong>Домен:</strong> {{ certificate.domain }}<br>
+        <strong>ИНН:</strong> {{ certificate.inn }}<br>
+        <strong>Период:</strong> {{ certificate.validity_period }}<br>
+        <strong>Пользователей:</strong> {{ certificate.users_count }}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/certificates/create">
+        <div class="form-group">
+            <label>Домен</label>
+            <input type="text" name="domain" placeholder="example.com или *.example.com" required>
+        </div>
+
+        <div class="form-group">
+            <label>ИНН / БИН</label>
+            <input type="text" name="inn" placeholder="10 или 12 цифр" pattern="\d{10,12}" required>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Дата начала</label>
+                <input type="date" name="valid_from" required>
+            </div>
+            <div class="form-group">
+                <label>Дата окончания</label>
+                <input type="date" name="valid_to" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Количество пользователей</label>
+            <input type="number" name="users_count" min="1" value="1" required>
+        </div>
+
+        <button type="submit" class="btn btn-success">Создать сертификат</button>
+        <a href="/certificates" class="btn" style="background: #eee; margin-left: 8px;">Отмена</a>
+    </form>
+</div>
+{% endblock %}

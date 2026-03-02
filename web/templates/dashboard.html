@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Панель управления - SBK Certificate Manager{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 16px;">Панель управления</h2>
+
+{% if stats.database %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.database.get('total_certificates', 0) }}</div>
+        <div class="stat-label">Всего сертификатов</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #27ae60;">{{ stats.database.get('active_certificates', 0) }}</div>
+        <div class="stat-label">Активных</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #e67e22;">{{ stats.database.get('expired_certificates', 0) }}</div>
+        <div class="stat-label">Просроченных</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #e74c3c;">{{ stats.database.get('inactive_certificates', 0) }}</div>
+        <div class="stat-label">Деактивированных</div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>Быстрые действия</h2>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        {% if user.role == 'admin' %}
+        <a href="/certificates/create" class="btn btn-success">Создать сертификат</a>
+        {% endif %}
+        <a href="/certificates" class="btn btn-primary">Все сертификаты</a>
+        <a href="/certificates/verify" class="btn btn-primary">Проверить сертификат</a>
+        {% if user.role == 'admin' %}
+        <a href="/request" class="btn btn-primary">Запрос по email</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if stats.file_storage %}
+<div class="card">
+    <h2>Хранилище</h2>
+    <p>Файлов: {{ stats.file_storage.get('total_files', 0) }} | Размер: {{ stats.file_storage.get('total_size_mb', 0) }} МБ</p>
+</div>
+{% endif %}
+{% endblock %}

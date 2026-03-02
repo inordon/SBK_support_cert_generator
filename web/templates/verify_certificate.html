@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Проверить сертификат - SBK Certificate Manager{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Проверка сертификата</h2>
+
+    <form method="get" action="/certificates/verify" style="display: flex; gap: 12px; align-items: end;">
+        <div class="form-group" style="margin-bottom: 0; flex: 1;">
+            <label>ID сертификата</label>
+            <input type="text" name="id" value="{{ cert_id }}" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" style="font-family: monospace;">
+        </div>
+        <button type="submit" class="btn btn-primary">Проверить</button>
+    </form>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if certificate %}
+{% set status = certificate.status_info %}
+<div class="card">
+    <h2>Результат проверки</h2>
+
+    <div style="margin-bottom: 16px;">
+        {% if status.status == 'active' %}
+        <span class="badge badge-active" style="font-size: 1.1em; padding: 6px 14px;">{{ status.emoji }} {{ status.text }}</span>
+        {% elif status.status in ['expiring_soon', 'expiring_very_soon', 'expired'] %}
+        <span class="badge badge-expired" style="font-size: 1.1em; padding: 6px 14px;">{{ status.emoji }} {{ status.text }}</span>
+        {% elif status.status == 'not_started' %}
+        <span class="badge badge-pending" style="font-size: 1.1em; padding: 6px 14px;">{{ status.emoji }} {{ status.text }}</span>
+        {% else %}
+        <span class="badge badge-inactive" style="font-size: 1.1em; padding: 6px 14px;">{{ status.emoji }} {{ status.text }}</span>
+        {% endif %}
+    </div>
+
+    <table>
+        <tr><th style="width: 200px;">ID сертификата</th><td><span class="cert-id">{{ certificate.certificate_id }}</span></td></tr>
+        <tr><th>Домен</th><td>{{ certificate.domain }}</td></tr>
+        <tr><th>ИНН</th><td>{{ certificate.inn }}</td></tr>
+        <tr><th>Период действия</th><td>{{ certificate.validity_period }}</td></tr>
+        <tr><th>Пользователей</th><td>{{ certificate.users_count }}</td></tr>
+        <tr><th>Дата создания</th><td>{{ certificate.created_at.strftime('%d.%m.%Y %H:%M') }}</td></tr>
+        <tr><th>Создатель</th><td>{{ certificate.creator_display_name }}</td></tr>
+        <tr><th>Активен</th><td>{{ "Да" if certificate.is_active else "Нет" }}</td></tr>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

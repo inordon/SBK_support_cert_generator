@@ -58,50 +58,30 @@ class AccessMiddleware(BaseMiddleware):
             logger.debug("Пропускаем событие без user_id")
             return await handler(event, data)
 
-        # Проверяем тип чата - в группах бот не отвечает на команды
-        if chat_type in ['group', 'supergroup']:
-            # В группах бот молчит, только слушает для уведомлений
-            logger.debug(f"Сообщение в группе {chat_type} от пользователя {user_id} - игнорируем")
-            return None
+        is_group = chat_type in ['group', 'supergroup']
 
-        # ОТЛАДОЧНОЕ ЛОГИРОВАНИЕ
-        logger.info(f"🔍 ПРОВЕРКА ДОСТУПА:")
-        logger.info(f"   User ID: {user_id} (тип: {type(user_id)})")
-        logger.info(f"   User Info: {user_info}")
-        logger.info(f"   Chat Type: {chat_type}")
-
-        # Получаем множества пользователей
-        admin_users = self.settings.admin_users_set
-        verify_users = self.settings.verify_users_set
-        all_users = self.settings.all_allowed_users
-
-        logger.info(f"   Admin Users: {admin_users}")
-        logger.info(f"   Verify Users: {verify_users}")
-        logger.info(f"   All Allowed: {all_users}")
+        # В группах обрабатываем только команды (начинаются с /) и callback-запросы
+        if is_group:
+            if isinstance(event, Message):
+                if not (event.text and event.text.startswith('/')):
+                    logger.debug(f"Не-командное сообщение в группе от {user_id} - игнорируем")
+                    return None
+            # CallbackQuery в группах пропускаем (для inline-кнопок)
 
         # Проверяем права доступа
         is_admin = self.settings.is_admin(user_id)
         is_verify = self.settings.is_verify_user(user_id)
         is_allowed = self.settings.is_allowed_user(user_id)
 
-        logger.info(f"   Is Admin: {is_admin}")
-        logger.info(f"   Is Verify: {is_verify}")
-        logger.info(f"   Is Allowed: {is_allowed}")
-
-        # Дополнительная проверка через прямое сравнение
-        direct_admin_check = user_id in admin_users
-        direct_verify_check = user_id in verify_users
-        direct_all_check = user_id in all_users
-
-        logger.info(f"   Direct Admin Check: {direct_admin_check}")
-        logger.info(f"   Direct Verify Check: {direct_verify_check}")
-        logger.info(f"   Direct All Check: {direct_all_check}")
+        logger.debug(f"🔍 Проверка доступа: user={user_id}, admin={is_admin}, verify={is_verify}, allowed={is_allowed}, group={is_group}")
 
         # Если пользователь не найден в списках
         if not is_allowed:
-            logger.warning(f"❌ ОТКАЗ В ДОСТУПЕ для пользователя {user_id} {user_info}")
-            logger.warning(f"   Пользователь НЕ найден в списках доступа")
-            logger.warning(f"   Проверьте .env файл и убедитесь, что ID {user_id} добавлен в VERIFY_USERS или ADMIN_USERS")
+            logger.warning(f"❌ Отказ в доступе для {user_id} {user_info}")
+
+            # В группах молча игнорируем неавторизованных пользователей
+            if is_group:
+                return None
 
             # Отправляем сообщение о запрете доступа только в личных сообщениях
             if isinstance(event, Message) and chat_type == 'private':
@@ -126,11 +106,11 @@ class AccessMiddleware(BaseMiddleware):
             'is_admin': is_admin,
             'can_verify': is_verify,
             'user_id': user_id,
-            'chat_type': chat_type
+            'chat_type': chat_type,
+            'is_group': is_group
         }
 
-        logger.info(f"✅ Пользователь {user_id} {user_info} получил доступ в {chat_type}")
-        logger.info(f"   Права: admin={is_admin}, verify={is_verify}")
+        logger.debug(f"✅ Доступ разрешен: {user_id} {user_info} в {chat_type}")
 
         # Выполняем основной обработчик
         return await handler(event, data)
@@ -182,10 +162,7 @@ class AdminRequiredMiddleware(BaseMiddleware):
         # Проверяем права администратора
         is_admin = self.settings.is_admin(user_id)
 
-        logger.info(f"🔐 ПРОВЕРКА АДМИНСКИХ ПРАВ:")
-        logger.info(f"   User ID: {user_id}")
-        logger.info(f"   Is Admin: {is_admin}")
-        logger.info(f"   Admin Users: {self.settings.admin_users_set}")
+        logger.debug(f"🔐 Проверка админских прав: user={user_id}, is_admin={is_admin}")
 
         if not is_admin:
             logger.warning(f"❌ Пользователь {user_id} попытался выполнить действие администратора")
@@ -207,7 +184,7 @@ class AdminRequiredMiddleware(BaseMiddleware):
 
             return None
 
-        logger.info(f"✅ Админские права подтверждены для пользователя {user_id}")
+        logger.debug(f"✅ Админские права подтверждены: user={user_id}")
 
         # Выполняем основной обработчик
         return await handler(event, data)
@@ -252,21 +229,17 @@ class VerifyRequiredMiddleware(BaseMiddleware):
         if user_id is None:
             return None
 
-        # В группах не обрабатываем команды проверки
-        if chat_type in ['group', 'supergroup']:
-            return None
-
         # Проверяем права на проверку (администраторы тоже могут проверять)
         can_verify = self.settings.is_verify_user(user_id)
 
-        logger.info(f"🔍 ПРОВЕРКА ПРАВ НА ВЕРИФИКАЦИЮ:")
-        logger.info(f"   User ID: {user_id}")
-        logger.info(f"   Can Verify: {can_verify}")
-        logger.info(f"   Admin Users: {self.settings.admin_users_set}")
-        logger.info(f"   Verify Users: {self.settings.verify_users_set}")
+        logger.debug(f"🔍 Проверка прав верификации: user={user_id}, can_verify={can_verify}")
 
         if not can_verify:
             logger.warning(f"❌ Пользователь {user_id} попытался проверить сертификат без прав")
+
+            is_group = chat_type in ['group', 'supergroup']
+            if is_group:
+                return None
 
             # Отправляем сообщение об отсутствии прав только в личных сообщениях
             if isinstance(event, Message) and chat_type == 'private':
@@ -284,7 +257,7 @@ class VerifyRequiredMiddleware(BaseMiddleware):
 
             return None
 
-        logger.info(f"✅ Права на верификацию подтверждены для пользователя {user_id}")
+        logger.debug(f"✅ Права верификации подтверждены: user={user_id}")
 
         # Выполняем основной обработчик
         return await handler(event, data)

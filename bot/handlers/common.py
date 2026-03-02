@@ -19,12 +19,36 @@ certificate_service = get_certificate_service()
 settings = get_settings()
 
 
+def _get_keyboard(user_permissions: dict):
+    """Возвращает клавиатуру с учетом контекста (группа/личный чат)."""
+    if user_permissions.get('is_group'):
+        return None
+    if user_permissions.get('is_admin'):
+        return get_main_menu_admin()
+    return get_main_menu_verify()
+
+
 @router.message(CommandStart())
 async def start_command(message: Message, state: FSMContext, user_permissions: dict):
     """Обработчик команды /start."""
-    await state.clear()  # Очищаем любые активные состояния
+    await state.clear()
 
     user_name = message.from_user.full_name or f"Пользователь {message.from_user.id}"
+    is_group = user_permissions.get('is_group', False)
+
+    if is_group:
+        # В группе показываем краткую справку по командам
+        welcome_text = (
+            f"👋 Привет, {user_name}!\n\n"
+            "Доступные команды в группе:\n"
+            "• /verify ID - проверить сертификат\n"
+            "• /search запрос - поиск сертификатов\n"
+            "• /list - список сертификатов\n"
+            "• /stats - статистика\n"
+            "• /help - справка"
+        )
+        await message.reply(welcome_text)
+        return
 
     if user_permissions['is_admin']:
         welcome_text = (
@@ -38,7 +62,6 @@ async def start_command(message: Message, state: FSMContext, user_permissions: d
             "Выберите действие:"
         )
         keyboard = get_main_menu_admin()
-
     else:
         welcome_text = (
             f"👋 Добро пожаловать, {user_name}!\n\n"
@@ -57,6 +80,23 @@ async def start_command(message: Message, state: FSMContext, user_permissions: d
 @router.message(F.text == ButtonTexts.HELP)
 async def help_command(message: Message, user_permissions: dict):
     """Обработчик команды /help и кнопки справки."""
+    is_group = user_permissions.get('is_group', False)
+
+    if is_group:
+        help_text = (
+            "📖 Справка по командам в группе\n\n"
+            "🔍 Проверка и поиск:\n"
+            "• /verify XXXXX-XXXXX-XXXXX-XXXXX - проверить сертификат\n"
+            "• /search example.com - поиск по домену\n"
+            "• /search 1234567890 - поиск по ИНН\n\n"
+            "📋 Просмотр:\n"
+            "• /list - список активных сертификатов\n"
+            "• /stats - статистика системы\n\n"
+            "ℹ️ Для полного функционала (создание, редактирование) "
+            "используйте личные сообщения с ботом."
+        )
+        await message.reply(help_text)
+        return
 
     if user_permissions['is_admin']:
         help_text = (
@@ -151,27 +191,17 @@ async def cancel_command(message: Message, state: FSMContext, user_permissions: 
     """Обработчик команды /cancel для отмены текущих операций."""
     await state.clear()
 
-    keyboard = get_main_menu_admin() if user_permissions['is_admin'] else get_main_menu_verify()
-
+    keyboard = _get_keyboard(user_permissions)
     await message.answer(
-        "❌ Текущая операция отменена. Возвращаемся в главное меню.",
+        "❌ Текущая операция отменена.",
         reply_markup=keyboard
     )
 
 
 @router.message(Command("status"))
 async def status_command(message: Message, user_permissions: dict):
-    """Обработчик команды /status для получения статистики."""
-
-    if not user_permissions['is_admin']:
-        await message.answer(
-            "❌ Команда доступна только администраторам.",
-            reply_markup=get_main_menu_verify()
-        )
-        return
-
+    """Обработчик команды /status для получения статистики (доступна всем авторизованным)."""
     try:
-        # Получаем статистику
         stats = certificate_service.get_statistics()
 
         db_stats = stats['database']
@@ -179,41 +209,40 @@ async def status_command(message: Message, user_permissions: dict):
 
         status_text = (
             "📊 Статистика системы\n\n"
-
             "🗄️ База данных:\n"
             f"• Всего сертификатов: {db_stats['total_certificates']}\n"
             f"• Активных: {db_stats['active_certificates']}\n"
             f"• Просроченных: {db_stats['expired_certificates']}\n"
             f"• Деактивированных: {db_stats['inactive_certificates']}\n\n"
-
             "📁 Файловое хранилище:\n"
             f"• Файлов: {file_stats['total_files']}\n"
             f"• Размер: {file_stats['total_size_mb']} МБ\n"
-            f"• Годы: {', '.join(file_stats['years_covered']) if file_stats['years_covered'] else 'нет данных'}\n"
-            f"• Путь: {file_stats['base_path']}\n\n"
-
+            f"• Годы: {', '.join(file_stats['years_covered']) if file_stats['years_covered'] else 'нет данных'}\n\n"
             f"🕒 Обновлено: {stats['last_updated'][:19]}"
         )
 
-        await message.answer(status_text, reply_markup=get_main_menu_admin())
+        keyboard = _get_keyboard(user_permissions)
+        await message.answer(status_text, reply_markup=keyboard)
 
     except Exception as e:
         logger.error(f"Ошибка получения статистики: {e}")
+        keyboard = _get_keyboard(user_permissions)
         await message.answer(
             "❌ Не удалось получить статистику системы.",
-            reply_markup=get_main_menu_admin()
+            reply_markup=keyboard
         )
 
 @router.message()
 async def unknown_message(message: Message, user_permissions: dict):
     """Обработчик неизвестных сообщений."""
+    # В группах не реагируем на неизвестные сообщения
+    if user_permissions.get('is_group'):
+        return
 
-    # Проверяем, не является ли это системным сообщением
     if message.content_type != 'text':
         return
 
-    keyboard = get_main_menu_admin() if user_permissions['is_admin'] else get_main_menu_verify()
-
+    keyboard = _get_keyboard(user_permissions)
     await message.answer(
         "❓ Неизвестная команда. Воспользуйтесь меню или командой /help для получения справки.",
         reply_markup=keyboard

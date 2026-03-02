@@ -398,7 +398,15 @@ async def process_confirmation(message: Message, state: FSMContext):
 
         except Exception as e:
             logger.warning(f"Не удалось отправить уведомление в группу: {e}")
-            # Не прерываем выполнение, просто логируем ошибку
+
+        # Отправляем email-уведомление (если настроено)
+        try:
+            from core.email_service import get_email_service
+            email_service = get_email_service()
+            if email_service.is_configured:
+                email_service.send_certificate_notification(certificate.to_dict())
+        except Exception as e:
+            logger.warning(f"Не удалось отправить email-уведомление: {e}")
 
         await state.clear()
 

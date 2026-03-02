@@ -5,8 +5,9 @@
 """
 
 import os
+import json
 from pathlib import Path
-from typing import List, Set
+from typing import List, Set, Optional, Dict
 from pydantic import Field, validator
 from pydantic_settings import BaseSettings
 
@@ -51,6 +52,23 @@ class Settings(BaseSettings):
     backup_schedule: str = Field(default="0 2 * * *", env="BACKUP_SCHEDULE", description="Расписание резервного копирования")
     max_backup_files: int = Field(default=30, env="MAX_BACKUP_FILES", description="Максимальное количество файлов бэкапа")
 
+    # Настройки email (опционально)
+    email_enabled: bool = Field(default=False, env="EMAIL_ENABLED", description="Включить отправку email")
+    email_smtp_host: str = Field(default="smtp.gmail.com", env="EMAIL_SMTP_HOST", description="SMTP сервер")
+    email_smtp_port: int = Field(default=587, env="EMAIL_SMTP_PORT", description="SMTP порт")
+    email_smtp_user: str = Field(default="", env="EMAIL_SMTP_USER", description="SMTP логин")
+    email_smtp_password: str = Field(default="", env="EMAIL_SMTP_PASSWORD", description="SMTP пароль")
+    email_from: str = Field(default="", env="EMAIL_FROM", description="Адрес отправителя")
+    email_request_to: str = Field(default="", env="EMAIL_REQUEST_TO", description="Адрес для запросов на сертификаты")
+    email_allowed_senders: str = Field(default="", env="EMAIL_ALLOWED_SENDERS", description="JSON-список разрешенных отправителей [{name, email}]")
+
+    # Настройки веб-сервиса (опционально)
+    web_enabled: bool = Field(default=False, env="WEB_ENABLED", description="Включить веб-сервис")
+    web_host: str = Field(default="0.0.0.0", env="WEB_HOST", description="Хост веб-сервиса")
+    web_port: int = Field(default=8443, env="WEB_PORT", description="Порт веб-сервиса")
+    web_secret_key: str = Field(default="change-me-in-production", env="WEB_SECRET_KEY", description="Секретный ключ для сессий")
+    web_users: str = Field(default="", env="WEB_USERS", description="JSON-список веб-пользователей [{username, password, role}]")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Создаем директории сразу при инициализации
@@ -87,6 +105,40 @@ class Settings(BaseSettings):
     def is_allowed_user(self, user_id: int) -> bool:
         """Проверяет, является ли пользователь разрешенным."""
         return user_id in self.all_allowed_users
+
+    @property
+    def email_allowed_senders_list(self) -> List[Dict[str, str]]:
+        """Возвращает список разрешенных отправителей email."""
+        if not self.email_allowed_senders:
+            return []
+        try:
+            return json.loads(self.email_allowed_senders)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    @property
+    def web_users_list(self) -> List[Dict[str, str]]:
+        """Возвращает список веб-пользователей."""
+        if not self.web_users:
+            return []
+        try:
+            return json.loads(self.web_users)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def get_web_user(self, username: str, password: str) -> Optional[Dict[str, str]]:
+        """Проверяет учетные данные веб-пользователя."""
+        for user in self.web_users_list:
+            if user.get('username') == username and user.get('password') == password:
+                return user
+        return None
+
+    def is_email_sender_allowed(self, email: str) -> bool:
+        """Проверяет, разрешен ли отправитель email."""
+        allowed = self.email_allowed_senders_list
+        if not allowed:
+            return True  # Если список не задан, разрешаем всех
+        return any(s.get('email', '').lower() == email.lower() for s in allowed)
 
     @validator('admin_users', 'verify_users')
     def validate_user_ids(cls, v):
@@ -222,6 +274,25 @@ LOG_FILE=./logs/bot.log
 # Общие настройки
 DEBUG=false
 TIMEZONE=Europe/Moscow
+
+# Настройки email (опционально)
+EMAIL_ENABLED=false
+EMAIL_SMTP_HOST=smtp.gmail.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=your_email@gmail.com
+EMAIL_SMTP_PASSWORD=your_app_password
+EMAIL_FROM=your_email@gmail.com
+EMAIL_REQUEST_TO=certificates@yourcompany.com
+# JSON-список разрешенных отправителей: [{"name": "Иванов И.И.", "email": "ivanov@company.com"}]
+EMAIL_ALLOWED_SENDERS=[]
+
+# Настройки веб-сервиса (опционально)
+WEB_ENABLED=false
+WEB_HOST=0.0.0.0
+WEB_PORT=8443
+WEB_SECRET_KEY=change-me-in-production
+# JSON-список пользователей: [{"username": "admin", "password": "secret", "role": "admin"}]
+WEB_USERS=[]
 """
 
     with open(".env.example", "w", encoding="utf-8") as f:
