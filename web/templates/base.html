@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SBK Certificate Manager{% endblock %}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; }
+        .navbar { background: #2c3e50; color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+        .navbar a { color: white; text-decoration: none; margin-left: 16px; }
+        .navbar a:hover { text-decoration: underline; }
+        .navbar .brand { font-weight: bold; font-size: 1.1em; }
+        .navbar .nav-links { display: flex; align-items: center; gap: 8px; }
+        .navbar .user-info { color: #bdc3c7; font-size: 0.9em; }
+        .container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+        .card { background: white; border-radius: 8px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { margin-bottom: 16px; color: #2c3e50; }
+        .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; }
+        .alert-error { background: #fdeaea; color: #c0392b; border: 1px solid #f5c6cb; }
+        .alert-success { background: #e8f5e9; color: #27ae60; border: 1px solid #c3e6cb; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 4px; font-weight: 500; color: #555; }
+        .form-group input, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.2); }
+        .btn { display: inline-block; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-success:hover { background: #219a52; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+        table { width: 100%; border-collapse: collapse; }
+        table th, table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+        table th { background: #f8f9fa; font-weight: 600; color: #555; }
+        table tr:hover { background: #f8f9fa; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+        .stat-card { background: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat-card .stat-value { font-size: 2em; font-weight: bold; color: #2c3e50; }
+        .stat-card .stat-label { color: #777; margin-top: 4px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .badge-active { background: #e8f5e9; color: #27ae60; }
+        .badge-expired { background: #fff3e0; color: #e67e22; }
+        .badge-inactive { background: #fdeaea; color: #e74c3c; }
+        .badge-pending { background: #e3f2fd; color: #2196f3; }
+        .cert-id { font-family: monospace; font-size: 0.9em; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 768px) { .form-row { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: 1fr 1fr; } }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <span class="brand">SBK Certificate Manager</span>
+        {% if user %}
+        <div class="nav-links">
+            <a href="/dashboard">Главная</a>
+            <a href="/certificates">Сертификаты</a>
+            {% if user.role == 'admin' %}
+            <a href="/certificates/create">Создать</a>
+            {% endif %}
+            <a href="/certificates/verify">Проверить</a>
+            <span class="user-info">{{ user.name }} ({{ user.role }})</span>
+            <a href="/logout">Выход</a>
+        </div>
+        {% endif %}
+    </nav>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

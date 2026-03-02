@@ -53,6 +53,16 @@ services:
       CERTIFICATES_PATH: /app/certificates
       LOG_FILE: /app/logs/bot.log
 
+      # Email settings (опционально)
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      EMAIL_SMTP_HOST: ${EMAIL_SMTP_HOST:-}
+      EMAIL_SMTP_PORT: ${EMAIL_SMTP_PORT:-587}
+      EMAIL_SMTP_USER: ${EMAIL_SMTP_USER:-}
+      EMAIL_SMTP_PASSWORD: ${EMAIL_SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_REQUEST_TO: ${EMAIL_REQUEST_TO:-}
+      EMAIL_ALLOWED_SENDERS: ${EMAIL_ALLOWED_SENDERS:-[]}
+
       # App settings
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DEBUG: ${DEBUG:-false}
@@ -81,6 +91,81 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Веб-сервис для управления сертификатами (опционально)
+  certificate_web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: certificate_web
+    restart: unless-stopped
+    user: "0:0"
+    command: python run_web.py
+    environment:
+      # Telegram (не используется, но нужен для settings)
+      BOT_TOKEN: ${BOT_TOKEN}
+      ADMIN_USERS: ${ADMIN_USERS}
+      VERIFY_USERS: ${VERIFY_USERS}
+      NOTIFICATION_GROUP: ${NOTIFICATION_GROUP}
+
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-certificates_db}
+      DB_USER: ${DB_USER:-certificates_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Storage
+      CERTIFICATES_PATH: /app/certificates
+      LOG_FILE: /app/logs/web.log
+
+      # Web settings
+      WEB_ENABLED: ${WEB_ENABLED:-false}
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: 8443
+      WEB_SECRET_KEY: ${WEB_SECRET_KEY:-change-me-in-production}
+      WEB_USERS: ${WEB_USERS:-[]}
+
+      # Email settings
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      EMAIL_SMTP_HOST: ${EMAIL_SMTP_HOST:-}
+      EMAIL_SMTP_PORT: ${EMAIL_SMTP_PORT:-587}
+      EMAIL_SMTP_USER: ${EMAIL_SMTP_USER:-}
+      EMAIL_SMTP_PASSWORD: ${EMAIL_SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_REQUEST_TO: ${EMAIL_REQUEST_TO:-}
+      EMAIL_ALLOWED_SENDERS: ${EMAIL_ALLOWED_SENDERS:-[]}
+
+      # App settings
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DEBUG: ${DEBUG:-false}
+      TIMEZONE: ${TIMEZONE:-Europe/Moscow}
+    volumes:
+      - type: bind
+        source: ./data/certificates
+        target: /app/certificates
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ./data/logs
+        target: /app/logs
+        bind:
+          create_host_path: true
+    ports:
+      - "${WEB_PORT:-8443}:8443"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - certificates_network
+    profiles:
+      - web
     deploy:
       resources:
         limits:
