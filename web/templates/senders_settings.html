@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Управление отправителями - SBK Certificate Manager{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Email для приёма запросов</h2>
+    <p style="color: #777; margin-bottom: 12px;">Адрес, на который будут отправляться запросы на сертификаты</p>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <form method="post" action="/settings/request-email">
+        <div class="form-row">
+            <div class="form-group">
+                <label>Email для запросов</label>
+                <input type="email" name="request_email" value="{{ request_email }}" placeholder="certificates@yourcompany.com" required>
+            </div>
+            <div class="form-group" style="display: flex; align-items: flex-end;">
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Добавить отправителя</h2>
+    <p style="color: #777; margin-bottom: 12px;">Люди, от которых принимаются обращения</p>
+
+    <form method="post" action="/settings/senders/add">
+        <div class="form-row">
+            <div class="form-group">
+                <label>ФИО</label>
+                <input type="text" name="sender_name" placeholder="Иванов Иван Иванович" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="sender_email" placeholder="ivanov@company.com" required>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success">Добавить</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Разрешённые отправители</h2>
+
+    {% if allowed_senders %}
+    <table>
+        <thead>
+            <tr>
+                <th>ФИО</th>
+                <th>Email</th>
+                <th>Добавлен</th>
+                <th style="width: 100px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sender in allowed_senders %}
+            <tr>
+                <td>{{ sender.name }}</td>
+                <td>{{ sender.email }}</td>
+                <td>{{ sender.created_at[:10] if sender.created_at else '-' }}</td>
+                <td>
+                    <form method="post" action="/settings/senders/delete/{{ sender.id }}" style="display: inline;" onsubmit="return confirm('Удалить {{ sender.name }}?');">
+                        <button type="submit" class="btn btn-danger" style="padding: 4px 12px; font-size: 12px;">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #999; padding: 20px 0; text-align: center;">Список пуст. Добавьте отправителей выше.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

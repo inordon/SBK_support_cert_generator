@@ -4,6 +4,10 @@
 <div class="card">
     <h2>Запрос на создание сертификата (по email)</h2>
 
+    {% if request_email %}
+    <p style="margin-bottom: 16px; color: #555;">Запрос будет отправлен на: <strong>{{ request_email }}</strong></p>
+    {% endif %}
+
     {% if not email_configured %}
     <div class="alert alert-error">Email не настроен. Добавьте EMAIL_* переменные в .env файл.</div>
     {% else %}

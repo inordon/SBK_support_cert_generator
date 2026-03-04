@@ -57,6 +57,7 @@
             <a href="/certificates">Сертификаты</a>
             {% if user.role == 'admin' %}
             <a href="/certificates/create">Создать</a>
+            <a href="/settings/senders">Отправители</a>
             {% endif %}
             <a href="/certificates/verify">Проверить</a>
             <span class="user-info">{{ user.name }} ({{ user.role }})</span>
