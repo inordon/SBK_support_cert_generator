@@ -42,6 +42,10 @@ class Certificate(Base):
     created_by_full_name = Column(String(200), nullable=True)  # Полное имя пользователя
     is_active = Column(Boolean, default=True, server_default=text('true'), nullable=False, index=True)
 
+    # Email и контактные лица для обращений по сертификату
+    request_email = Column(String(255), nullable=True)  # Email для отправки запросов
+    contacts = Column(JSONB, nullable=True)  # Список контактов: [{"name": "ФИО", "email": "email"}]
+
     # Индексы для оптимизации поиска
     __table_args__ = (
         Index('idx_certificate_active_domain', 'domain', 'is_active'),
@@ -89,7 +93,9 @@ class Certificate(Base):
             "created_by": self.created_by,
             "is_active": self.is_active,
             "is_expired": self.is_expired,
-            "days_left": self.days_left
+            "days_left": self.days_left,
+            "request_email": self.request_email,
+            "contacts": self.contacts or []
         }
 
 
@@ -114,41 +120,6 @@ class CertificateHistory(Base):
 
     def __repr__(self):
         return f"<CertificateHistory(certificate_id={self.certificate_id}, action={self.action})>"
-
-
-class AllowedSender(Base):
-    """Модель разрешённого отправителя запросов."""
-
-    __tablename__ = "allowed_senders"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(200), nullable=False)  # ФИО
-    email = Column(String(255), nullable=False, unique=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    def __repr__(self):
-        return f"<AllowedSender(name={self.name}, email={self.email})>"
-
-    def to_dict(self) -> dict:
-        return {
-            "id": str(self.id),
-            "name": self.name,
-            "email": self.email,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-
-
-class AppConfig(Base):
-    """Модель для хранения настроек приложения (ключ-значение)."""
-
-    __tablename__ = "app_config"
-
-    key = Column(String(100), primary_key=True)
-    value = Column(Text, nullable=False, default="")
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    def __repr__(self):
-        return f"<AppConfig(key={self.key})>"
 
 
 class DatabaseManager:
@@ -177,8 +148,6 @@ class DatabaseManager:
         # Добавляем ссылку на модели для использования в репозитории
         self.Certificate = Certificate
         self.CertificateHistory = CertificateHistory
-        self.AllowedSender = AllowedSender
-        self.AppConfig = AppConfig
 
     def create_tables(self):
         """Создает все таблицы в базе данных."""
@@ -245,6 +214,8 @@ class CertificateRepository:
             cert_created_by_username = certificate.created_by_username
             cert_created_by_full_name = certificate.created_by_full_name
             cert_is_active = certificate.is_active
+            cert_request_email = certificate.request_email
+            cert_contacts = certificate.contacts
 
             # Добавляем запись в историю
             self._add_history_record(
@@ -270,6 +241,8 @@ class CertificateRepository:
         new_certificate.created_by_username = cert_created_by_username
         new_certificate.created_by_full_name = cert_created_by_full_name
         new_certificate.is_active = cert_is_active
+        new_certificate.request_email = cert_request_email
+        new_certificate.contacts = cert_contacts
 
         return new_certificate
 
@@ -547,85 +520,9 @@ class CertificateRepository:
             }
 
 
-class AllowedSenderRepository:
-    """Репозиторий для управления разрешёнными отправителями."""
-
-    def __init__(self, db_manager: DatabaseManager):
-        self.db_manager = db_manager
-
-    def get_all(self) -> List[dict]:
-        """Возвращает список всех разрешённых отправителей."""
-        with self.db_manager.get_session() as session:
-            senders = session.query(AllowedSender).order_by(AllowedSender.name).all()
-            return [s.to_dict() for s in senders]
-
-    def add(self, name: str, email: str) -> dict:
-        """Добавляет нового отправителя."""
-        with self.db_manager.get_session() as session:
-            sender = AllowedSender(name=name.strip(), email=email.strip().lower())
-            session.add(sender)
-            session.commit()
-            return sender.to_dict()
-
-    def delete(self, sender_id: str) -> bool:
-        """Удаляет отправителя по ID."""
-        with self.db_manager.get_session() as session:
-            sender = session.query(AllowedSender).filter(
-                AllowedSender.id == sender_id
-            ).first()
-            if sender:
-                session.delete(sender)
-                session.commit()
-                return True
-            return False
-
-    def exists(self, email: str) -> bool:
-        """Проверяет, есть ли отправитель с таким email."""
-        with self.db_manager.get_session() as session:
-            return session.query(AllowedSender).filter(
-                AllowedSender.email == email.strip().lower()
-            ).first() is not None
-
-    def is_allowed(self, email: str) -> bool:
-        """Проверяет, разрешён ли отправитель. Если список пуст — разрешены все."""
-        with self.db_manager.get_session() as session:
-            count = session.query(AllowedSender).count()
-            if count == 0:
-                return True
-            return session.query(AllowedSender).filter(
-                AllowedSender.email == email.strip().lower()
-            ).first() is not None
-
-
-class AppConfigRepository:
-    """Репозиторий для хранения настроек приложения."""
-
-    def __init__(self, db_manager: DatabaseManager):
-        self.db_manager = db_manager
-
-    def get(self, key: str, default: str = "") -> str:
-        """Получает значение настройки."""
-        with self.db_manager.get_session() as session:
-            config = session.query(AppConfig).filter(AppConfig.key == key).first()
-            return config.value if config else default
-
-    def set(self, key: str, value: str):
-        """Устанавливает значение настройки."""
-        with self.db_manager.get_session() as session:
-            config = session.query(AppConfig).filter(AppConfig.key == key).first()
-            if config:
-                config.value = value
-            else:
-                config = AppConfig(key=key, value=value)
-                session.add(config)
-            session.commit()
-
-
 # Глобальный менеджер БД
 db_manager = DatabaseManager()
 certificate_repo = CertificateRepository(db_manager)
-sender_repo = AllowedSenderRepository(db_manager)
-config_repo = AppConfigRepository(db_manager)
 
 
 def get_db_manager() -> DatabaseManager:
@@ -636,16 +533,6 @@ def get_db_manager() -> DatabaseManager:
 def get_certificate_repo() -> CertificateRepository:
     """Возвращает репозиторий сертификатов."""
     return certificate_repo
-
-
-def get_sender_repo() -> AllowedSenderRepository:
-    """Возвращает репозиторий разрешённых отправителей."""
-    return sender_repo
-
-
-def get_config_repo() -> AppConfigRepository:
-    """Возвращает репозиторий настроек."""
-    return config_repo
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ from .service import get_certificate_service
 from .models import Certificate, CertificateRequest, SearchRequest
 from .generator import CertificateIDGenerator
 from .validators import DataValidator
-from .database import get_db_manager, get_certificate_repo, get_sender_repo, get_config_repo
+from .database import get_db_manager, get_certificate_repo
 from .storage import get_file_storage, get_storage_manager
 
 __version__ = "1.0.0"
@@ -20,8 +20,6 @@ __all__ = [
     'DataValidator',
     'get_db_manager',
     'get_certificate_repo',
-    'get_sender_repo',
-    'get_config_repo',
     'get_file_storage',
     'get_storage_manager'
 ]

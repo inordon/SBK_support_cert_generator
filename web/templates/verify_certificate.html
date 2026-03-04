@@ -43,6 +43,16 @@
         <tr><th>Дата создания</th><td>{{ certificate.created_at.strftime('%d.%m.%Y %H:%M') }}</td></tr>
         <tr><th>Создатель</th><td>{{ certificate.creator_display_name }}</td></tr>
         <tr><th>Активен</th><td>{{ "Да" if certificate.is_active else "Нет" }}</td></tr>
+        {% if certificate.request_email %}
+        <tr><th>Email для запросов</th><td>{{ certificate.request_email }}</td></tr>
+        {% endif %}
+        {% if certificate.contacts %}
+        <tr><th>Контактные лица</th><td>
+            {% for c in certificate.contacts %}
+            {{ c.name }} ({{ c.email }})<br>
+            {% endfor %}
+        </td></tr>
+        {% endif %}
     </table>
 </div>
 {% endif %}

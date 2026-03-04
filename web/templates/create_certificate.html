@@ -18,6 +18,15 @@
         <strong>ИНН:</strong> {{ certificate.inn }}<br>
         <strong>Период:</strong> {{ certificate.validity_period }}<br>
         <strong>Пользователей:</strong> {{ certificate.users_count }}
+        {% if certificate.request_email %}
+        <br><strong>Email для запросов:</strong> {{ certificate.request_email }}
+        {% endif %}
+        {% if certificate.contacts %}
+        <br><strong>Контактные лица:</strong>
+        {% for c in certificate.contacts %}
+        <br>&nbsp;&nbsp;• {{ c.name }} ({{ c.email }})
+        {% endfor %}
+        {% endif %}
         {% endif %}
     </div>
     {% endif %}
@@ -49,8 +58,39 @@
             <input type="number" name="users_count" min="1" value="1" required>
         </div>
 
-        <button type="submit" class="btn btn-success">Создать сертификат</button>
-        <a href="/certificates" class="btn" style="background: #eee; margin-left: 8px;">Отмена</a>
+        <h3 style="margin: 20px 0 12px; color: #555;">Email и контактные лица</h3>
+
+        <div class="form-group">
+            <label>Email для отправки запросов</label>
+            <input type="email" name="request_email" placeholder="support@company.com">
+        </div>
+
+        <div id="contacts-container">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #555;">Контактные лица (ФИО + Email)</label>
+            <div class="contact-row" style="display: flex; gap: 12px; margin-bottom: 8px;">
+                <input type="text" name="contact_name" placeholder="ФИО" style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                <input type="email" name="contact_email" placeholder="email@company.com" style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            </div>
+        </div>
+        <button type="button" onclick="addContact()" class="btn" style="background: #eee; margin-bottom: 20px; font-size: 13px; padding: 6px 14px;">+ Добавить контакт</button>
+
+        <div>
+            <button type="submit" class="btn btn-success">Создать сертификат</button>
+            <a href="/certificates" class="btn" style="background: #eee; margin-left: 8px;">Отмена</a>
+        </div>
     </form>
 </div>
+
+<script>
+function addContact() {
+    var container = document.getElementById('contacts-container');
+    var row = document.createElement('div');
+    row.className = 'contact-row';
+    row.style.cssText = 'display: flex; gap: 12px; margin-bottom: 8px;';
+    row.innerHTML = '<input type="text" name="contact_name" placeholder="ФИО" style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">' +
+                    '<input type="email" name="contact_email" placeholder="email@company.com" style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">' +
+                    '<button type="button" onclick="this.parentElement.remove()" class="btn btn-danger" style="padding: 6px 12px; font-size: 13px;">✕</button>';
+    container.appendChild(row);
+}
+</script>
 {% endblock %}

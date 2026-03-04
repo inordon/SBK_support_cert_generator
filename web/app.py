@@ -24,15 +24,12 @@ from config.settings import get_settings
 from core.service import get_certificate_service
 from core.models import CertificateRequest, SearchRequest, EditCertificateDatesRequest
 from core.email_service import get_email_service
-from core.database import get_sender_repo, get_config_repo
 
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
 certificate_service = get_certificate_service()
 email_service = get_email_service()
-sender_repo = get_sender_repo()
-config_repo = get_config_repo()
 
 app = FastAPI(title="SBK Certificate Manager", docs_url=None, redoc_url=None)
 
@@ -187,20 +184,31 @@ async def create_certificate_page(request: Request):
 
 
 @app.post("/certificates/create")
-async def create_certificate_action(
-    request: Request,
-    domain: str = Form(...),
-    inn: str = Form(...),
-    valid_from: str = Form(...),
-    valid_to: str = Form(...),
-    users_count: int = Form(...)
-):
+async def create_certificate_action(request: Request):
     """Обработка создания сертификата."""
     user = get_current_user(request)
     if not user or user.get("role") != "admin":
         return RedirectResponse(url="/login", status_code=303)
 
     try:
+        form_data = await request.form()
+        domain = form_data.get("domain", "")
+        inn = form_data.get("inn", "")
+        valid_from = form_data.get("valid_from", "")
+        valid_to = form_data.get("valid_to", "")
+        users_count = int(form_data.get("users_count", 1))
+        request_email = form_data.get("request_email", "").strip() or None
+
+        # Собираем контактные лица из множественных полей
+        contact_names = form_data.getlist("contact_name")
+        contact_emails = form_data.getlist("contact_email")
+        contacts = []
+        for name, email in zip(contact_names, contact_emails):
+            name = name.strip()
+            email = email.strip()
+            if name and email:
+                contacts.append({"name": name, "email": email})
+
         vf = datetime.strptime(valid_from, "%Y-%m-%d").date()
         vt = datetime.strptime(valid_to, "%Y-%m-%d").date()
 
@@ -222,7 +230,9 @@ async def create_certificate_action(
             users_count=users_count,
             created_by=0,  # Веб-пользователь (не Telegram)
             created_by_username=None,
-            created_by_full_name=f"web:{user['username']}"
+            created_by_full_name=f"web:{user['username']}",
+            request_email=request_email,
+            contacts=contacts or None
         )
 
         certificate, has_existing = certificate_service.create_certificate(cert_request)
@@ -287,16 +297,13 @@ async def request_certificate_page(request: Request):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Берём список отправителей из БД
-    allowed_senders = sender_repo.get_all()
-    request_email = config_repo.get("request_email", "")
+    allowed_senders = email_service.get_allowed_senders()
 
     return templates.TemplateResponse("request_certificate.html", {
         "request": request,
         "user": user,
         "allowed_senders": allowed_senders,
         "email_configured": email_service.is_configured,
-        "request_email": request_email,
         "error": None,
         "success": None,
     })
@@ -318,9 +325,7 @@ async def request_certificate_action(
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Берём список отправителей из БД
-    allowed_senders = sender_repo.get_all()
-    request_email_addr = config_repo.get("request_email", "")
+    allowed_senders = email_service.get_allowed_senders()
 
     if not email_service.is_configured:
         return templates.TemplateResponse("request_certificate.html", {
@@ -328,20 +333,7 @@ async def request_certificate_action(
             "user": user,
             "allowed_senders": allowed_senders,
             "email_configured": False,
-            "request_email": request_email_addr,
             "error": "Email не настроен",
-            "success": None,
-        })
-
-    # Проверяем, разрешён ли отправитель (через БД)
-    if not sender_repo.is_allowed(sender_email):
-        return templates.TemplateResponse("request_certificate.html", {
-            "request": request,
-            "user": user,
-            "allowed_senders": allowed_senders,
-            "email_configured": True,
-            "request_email": request_email_addr,
-            "error": f"Отправитель {sender_email} не в списке разрешённых",
             "success": None,
         })
 
@@ -360,108 +352,6 @@ async def request_certificate_action(
         "user": user,
         "allowed_senders": allowed_senders,
         "email_configured": True,
-        "request_email": request_email_addr,
-        "error": None if success else "Не удалось отправить запрос. Проверьте настройки email.",
+        "error": None if success else "Не удалось отправить запрос. Проверьте email отправителя.",
         "success": "Запрос отправлен на рассмотрение" if success else None,
-    })
-
-
-# --- Управление отправителями и настройками email ---
-
-@app.get("/settings/senders", response_class=HTMLResponse)
-async def senders_settings_page(request: Request):
-    """Страница управления разрешёнными отправителями и email для запросов."""
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
-    if user.get("role") != "admin":
-        return RedirectResponse(url="/dashboard", status_code=303)
-
-    allowed_senders = sender_repo.get_all()
-    request_email = config_repo.get("request_email", "")
-
-    return templates.TemplateResponse("senders_settings.html", {
-        "request": request,
-        "user": user,
-        "allowed_senders": allowed_senders,
-        "request_email": request_email,
-        "error": None,
-        "success": None,
-    })
-
-
-@app.post("/settings/senders/add")
-async def add_sender(
-    request: Request,
-    sender_name: str = Form(...),
-    sender_email: str = Form(...)
-):
-    """Добавление нового разрешённого отправителя."""
-    user = get_current_user(request)
-    if not user or user.get("role") != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-
-    error = None
-    success = None
-
-    sender_email = sender_email.strip().lower()
-    sender_name = sender_name.strip()
-
-    if not sender_name or not sender_email:
-        error = "ФИО и email обязательны"
-    elif sender_repo.exists(sender_email):
-        error = f"Отправитель с email {sender_email} уже существует"
-    else:
-        try:
-            sender_repo.add(sender_name, sender_email)
-            success = f"Отправитель {sender_name} ({sender_email}) добавлен"
-        except Exception as e:
-            logger.error(f"Ошибка добавления отправителя: {e}")
-            error = f"Ошибка: {e}"
-
-    allowed_senders = sender_repo.get_all()
-    request_email = config_repo.get("request_email", "")
-
-    return templates.TemplateResponse("senders_settings.html", {
-        "request": request,
-        "user": user,
-        "allowed_senders": allowed_senders,
-        "request_email": request_email,
-        "error": error,
-        "success": success,
-    })
-
-
-@app.post("/settings/senders/delete/{sender_id}")
-async def delete_sender(request: Request, sender_id: str):
-    """Удаление разрешённого отправителя."""
-    user = get_current_user(request)
-    if not user or user.get("role") != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-
-    sender_repo.delete(sender_id)
-    return RedirectResponse(url="/settings/senders", status_code=303)
-
-
-@app.post("/settings/request-email")
-async def update_request_email(
-    request: Request,
-    request_email: str = Form(...)
-):
-    """Обновление email-адреса для приёма запросов."""
-    user = get_current_user(request)
-    if not user or user.get("role") != "admin":
-        return RedirectResponse(url="/login", status_code=303)
-
-    config_repo.set("request_email", request_email.strip())
-
-    allowed_senders = sender_repo.get_all()
-
-    return templates.TemplateResponse("senders_settings.html", {
-        "request": request,
-        "user": user,
-        "allowed_senders": allowed_senders,
-        "request_email": request_email.strip(),
-        "error": None,
-        "success": f"Email для запросов обновлён: {request_email.strip()}",
     })
