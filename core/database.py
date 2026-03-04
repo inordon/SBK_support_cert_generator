@@ -42,6 +42,10 @@ class Certificate(Base):
     created_by_full_name = Column(String(200), nullable=True)  # Полное имя пользователя
     is_active = Column(Boolean, default=True, server_default=text('true'), nullable=False, index=True)
 
+    # Email и контактные лица для обращений по сертификату
+    request_email = Column(String(255), nullable=True)  # Email для отправки запросов
+    contacts = Column(JSONB, nullable=True)  # Список контактов: [{"name": "ФИО", "email": "email"}]
+
     # Индексы для оптимизации поиска
     __table_args__ = (
         Index('idx_certificate_active_domain', 'domain', 'is_active'),
@@ -89,7 +93,9 @@ class Certificate(Base):
             "created_by": self.created_by,
             "is_active": self.is_active,
             "is_expired": self.is_expired,
-            "days_left": self.days_left
+            "days_left": self.days_left,
+            "request_email": self.request_email,
+            "contacts": self.contacts or []
         }
 
 
@@ -208,6 +214,8 @@ class CertificateRepository:
             cert_created_by_username = certificate.created_by_username
             cert_created_by_full_name = certificate.created_by_full_name
             cert_is_active = certificate.is_active
+            cert_request_email = certificate.request_email
+            cert_contacts = certificate.contacts
 
             # Добавляем запись в историю
             self._add_history_record(
@@ -233,6 +241,8 @@ class CertificateRepository:
         new_certificate.created_by_username = cert_created_by_username
         new_certificate.created_by_full_name = cert_created_by_full_name
         new_certificate.is_active = cert_is_active
+        new_certificate.request_email = cert_request_email
+        new_certificate.contacts = cert_contacts
 
         return new_certificate
 

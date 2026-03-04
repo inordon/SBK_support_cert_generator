@@ -184,20 +184,31 @@ async def create_certificate_page(request: Request):
 
 
 @app.post("/certificates/create")
-async def create_certificate_action(
-    request: Request,
-    domain: str = Form(...),
-    inn: str = Form(...),
-    valid_from: str = Form(...),
-    valid_to: str = Form(...),
-    users_count: int = Form(...)
-):
+async def create_certificate_action(request: Request):
     """Обработка создания сертификата."""
     user = get_current_user(request)
     if not user or user.get("role") != "admin":
         return RedirectResponse(url="/login", status_code=303)
 
     try:
+        form_data = await request.form()
+        domain = form_data.get("domain", "")
+        inn = form_data.get("inn", "")
+        valid_from = form_data.get("valid_from", "")
+        valid_to = form_data.get("valid_to", "")
+        users_count = int(form_data.get("users_count", 1))
+        request_email = form_data.get("request_email", "").strip() or None
+
+        # Собираем контактные лица из множественных полей
+        contact_names = form_data.getlist("contact_name")
+        contact_emails = form_data.getlist("contact_email")
+        contacts = []
+        for name, email in zip(contact_names, contact_emails):
+            name = name.strip()
+            email = email.strip()
+            if name and email:
+                contacts.append({"name": name, "email": email})
+
         vf = datetime.strptime(valid_from, "%Y-%m-%d").date()
         vt = datetime.strptime(valid_to, "%Y-%m-%d").date()
 
@@ -219,7 +230,9 @@ async def create_certificate_action(
             users_count=users_count,
             created_by=0,  # Веб-пользователь (не Telegram)
             created_by_username=None,
-            created_by_full_name=f"web:{user['username']}"
+            created_by_full_name=f"web:{user['username']}",
+            request_email=request_email,
+            contacts=contacts or None
         )
 
         certificate, has_existing = certificate_service.create_certificate(cert_request)

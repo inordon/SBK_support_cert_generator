@@ -5,7 +5,7 @@ Pydantic модели для валидации и сериализации да
 """
 
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, validator
 from .exceptions import *
 
@@ -20,6 +20,8 @@ class CertificateRequest(BaseModel):
     created_by: int = Field(..., description="Telegram ID создателя")
     created_by_username: Optional[str] = Field(None, description="Telegram username создателя")
     created_by_full_name: Optional[str] = Field(None, description="Полное имя создателя")
+    request_email: Optional[str] = Field(None, description="Email для отправки запросов по сертификату")
+    contacts: Optional[List[dict]] = Field(None, description="Список контактов: [{name, email}]")
 
     @validator('domain')
     def validate_domain(cls, v):
@@ -154,6 +156,8 @@ class Certificate(BaseModel):
     created_by_username: Optional[str] = Field(None, description="Telegram username создателя")
     created_by_full_name: Optional[str] = Field(None, description="Полное имя создателя")
     is_active: bool = Field(default=True, description="Активен ли сертификат")
+    request_email: Optional[str] = Field(None, description="Email для отправки запросов по сертификату")
+    contacts: Optional[List[dict]] = Field(None, description="Список контактов: [{name, email}]")
 
     @property
     def validity_period(self) -> str:
@@ -286,7 +290,9 @@ class Certificate(BaseModel):
             "status_text": status["text"],
             "is_expired": status["is_expired"],
             "is_not_started": status["is_not_started"],
-            "days_left": status["days_left"]
+            "days_left": status["days_left"],
+            "request_email": self.request_email,
+            "contacts": self.contacts or []
         }
 
     class Config:

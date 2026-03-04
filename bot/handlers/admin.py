@@ -44,27 +44,21 @@ example.com
 100
 ```
 
-📋 Примеры:
+Дополнительно можно указать email и контактных лиц:
+
 ```
 01.01.2025-31.12.2025
 7707083893
 my-site.com
 500
+support@company.com
+Иванов И.И. ivanov@company.com
+Петров П.П. petrov@company.com
 ```
 
-```
-01.07.2025-30.06.2026
-1234567890
-*.example.com
-1
-```
-
-ℹ️ Поддерживаемые форматы доменов:
-• example.com
-• sub.example.com
-• my-site.com
-• *.example.com (wildcard)
-• *.sub.example.com
+Строки 5+ необязательны:
+• Строка 5: email для отправки запросов
+• Строки 6+: ФИО и email контактных лиц
 
 Отправьте данные или нажмите "Отменить":"""
 
@@ -135,6 +129,13 @@ async def process_certificate_data(message: Message, state: FSMContext):
                 f"👥 Пользователей: {certificate_data['users_count']}\n"
             )
 
+            if certificate_data.get('request_email'):
+                confirmation_text += f"📧 Email для запросов: {certificate_data['request_email']}\n"
+
+            if certificate_data.get('contacts'):
+                contacts_str = "\n".join(f"  • {c['name']} ({c['email']})" for c in certificate_data['contacts'])
+                confirmation_text += f"👤 Контактные лица:\n{contacts_str}\n"
+
             if len(existing_certificates) > 0:
                 confirmation_text += "\n⚠️ Для этого домена уже есть активные сертификаты!"
 
@@ -197,13 +198,15 @@ def parse_certificate_message(text: str) -> dict:
     # Парсим построчный формат
     lines = [line.strip() for line in text.split('\n') if line.strip()]
 
-    if len(lines) != 4:
+    if len(lines) < 4:
         raise ValueError(
-            f"Неверное количество строк: {len(lines)}. Ожидается 4 строки:\n"
+            f"Неверное количество строк: {len(lines)}. Ожидается минимум 4 строки:\n"
             "1. Срок действия (ДД.ММ.ГГГГ-ДД.ММ.ГГГГ)\n"
             "2. ИНН (10 или 12 цифр)\n"
             "3. Домен\n"
-            "4. Количество пользователей"
+            "4. Количество пользователей\n"
+            "5. Email для запросов (необязательно)\n"
+            "6+. ФИО email контактных лиц (необязательно)"
         )
 
     try:
@@ -249,6 +252,37 @@ def parse_certificate_message(text: str) -> dict:
     if users_count < 1:
         raise ValueError("Количество пользователей должно быть больше 0")
     result['users_count'] = users_count
+
+    # Строка 5 (необязательная): Email для запросов
+    if len(lines) > 4:
+        email_line = lines[4].strip()
+        if '@' in email_line and ' ' not in email_line:
+            result['request_email'] = email_line
+            contact_start = 5
+        else:
+            # Если строка 5 не похожа на email, это может быть контакт
+            result['request_email'] = None
+            contact_start = 4
+
+        # Строки 6+ (необязательные): Контактные лица (ФИО email)
+        contacts = []
+        for i in range(contact_start, len(lines)):
+            contact_line = lines[i].strip()
+            if not contact_line:
+                continue
+            # Ищем email в строке (последнее слово с @)
+            parts = contact_line.rsplit(maxsplit=1)
+            if len(parts) == 2 and '@' in parts[1]:
+                contacts.append({"name": parts[0].strip(), "email": parts[1].strip()})
+            elif '@' in contact_line:
+                # Пробуем разделить по пробелу перед email
+                import re as _re
+                match = _re.match(r'^(.+?)\s+([\w.+-]+@[\w.-]+)$', contact_line)
+                if match:
+                    contacts.append({"name": match.group(1).strip(), "email": match.group(2).strip()})
+
+        if contacts:
+            result['contacts'] = contacts
 
     return result
 
@@ -346,7 +380,9 @@ async def process_confirmation(message: Message, state: FSMContext):
             users_count=data['users_count'],
             created_by=message.from_user.id,
             created_by_username=message.from_user.username,
-            created_by_full_name=message.from_user.full_name
+            created_by_full_name=message.from_user.full_name,
+            request_email=data.get('request_email'),
+            contacts=data.get('contacts')
         )
 
         logger.info(f"Запрос создан: {certificate_request}")
@@ -383,8 +419,16 @@ async def process_confirmation(message: Message, state: FSMContext):
                     f"📅 Период: {certificate.validity_period}\n"
                     f"👥 Пользователей: {certificate.users_count}\n"
                     f"{status['emoji']} Статус: {status['text']}\n"
-                    f"👤 Создатель: {certificate.creator_display_name}"
                 )
+
+                if certificate.request_email:
+                    notification_text += f"📧 Email для запросов: {certificate.request_email}\n"
+
+                if certificate.contacts:
+                    contacts_str = "\n".join(f"  • {c.get('name', '')} ({c.get('email', '')})" for c in certificate.contacts)
+                    notification_text += f"👤 Контактные лица:\n{contacts_str}\n"
+
+                notification_text += f"🔧 Создатель: {certificate.creator_display_name}"
 
                 # Получаем бота из контекста
                 bot = message.bot

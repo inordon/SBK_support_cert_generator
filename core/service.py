@@ -67,7 +67,9 @@ class CertificateService:
                 "created_by": str(request.created_by),
                 "created_by_username": request.created_by_username,
                 "created_by_full_name": request.created_by_full_name,
-                "is_active": True  # Явно устанавливаем значение
+                "is_active": True,
+                "request_email": request.request_email,
+                "contacts": request.contacts
             }
 
             # Сохраняем в БД
@@ -334,12 +336,21 @@ class CertificateService:
             f"{status['emoji']} Статус: {status['text']}"
         ]
 
+        if certificate.request_email:
+            info.append(f"📧 Email для запросов: {certificate.request_email}")
+
+        if certificate.contacts:
+            contacts_lines = []
+            for c in certificate.contacts:
+                contacts_lines.append(f"  • {c.get('name', '')} ({c.get('email', '')})")
+            info.append("👤 Контактные лица:\n" + "\n".join(contacts_lines))
+
         if detailed:
             # Безопасно обрабатываем имя создателя
             creator_name = certificate.creator_display_name or f"ID: {certificate.created_by}"
             info.extend([
                 f"📝 Создан: {certificate.created_at.strftime('%d.%m.%Y %H:%M')}",
-                f"👤 Создатель: {creator_name}"
+                f"🔧 Создатель: {creator_name}"
             ])
 
         return "\n".join(info)
@@ -418,7 +429,9 @@ class CertificateService:
             created_by=created_by_int,
             created_by_username=getattr(db_certificate, 'created_by_username', None),
             created_by_full_name=getattr(db_certificate, 'created_by_full_name', None),
-            is_active=is_active
+            is_active=is_active,
+            request_email=getattr(db_certificate, 'request_email', None),
+            contacts=getattr(db_certificate, 'contacts', None)
         )
 
 
