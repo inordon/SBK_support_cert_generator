@@ -73,6 +73,22 @@
                         <label class="form-label text-muted small">Дней осталось</label>
                         <div>{{ certificate.days_left }}</div>
                     </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Стоимость</label>
+                        <div>{% if certificate.price %}{{ certificate.price|floatformat:2 }} &#8381;{% else %}—{% endif %}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label text-muted small">Статус оплаты</label>
+                        <div>
+                            {% if certificate.payment_status == 'paid' %}
+                            <span class="badge bg-success">Оплачен</span>
+                            {% elif certificate.payment_status == 'pending' %}
+                            <span class="badge bg-warning text-dark">Ожидает оплаты</span>
+                            {% elif certificate.payment_status == 'free' %}
+                            <span class="badge bg-info">Бесплатный</span>
+                            {% endif %}
+                        </div>
+                    </div>
                     {% if certificate.request_email %}
                     <div class="col-12">
                         <label class="form-label text-muted small">Email для запросов</label>

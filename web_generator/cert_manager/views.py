@@ -1,4 +1,7 @@
+import json
 import logging
+from collections import defaultdict
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -6,7 +9,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.paginator import Paginator
 from django.db import IntegrityError, connection
-from django.db.models import Q, Count, Case, When, Value, BooleanField
+from django.db.models import Q, Count, Sum, DecimalField
+from django.db.models.functions import TruncMonth
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
@@ -63,10 +67,11 @@ def healthz(request):
 
 @login_required
 def dashboard(request):
-    """Главная страница — дашборд со статистикой (один агрегирующий запрос)."""
+    """Главная страница — дашборд со статистикой и аналитикой."""
     today = timezone.now().date()
-    expiry_threshold = today + timezone.timedelta(days=60)
+    expiry_threshold = today + timedelta(days=60)
 
+    # Основная статистика (один агрегирующий запрос)
     stats = Certificate.objects.aggregate(
         total=Count('id'),
         active=Count('id', filter=Q(
@@ -77,17 +82,108 @@ def dashboard(request):
         )),
         expired=Count('id', filter=Q(is_active=True, valid_to__lt=today)),
         inactive=Count('id', filter=Q(is_active=False)),
+        total_revenue=Sum('price', filter=Q(payment_status='paid')),
+        pending_revenue=Sum('price', filter=Q(payment_status='pending')),
+    )
+
+    # Создание сертификатов по месяцам (последние 12 мес)
+    twelve_months_ago = today - timedelta(days=365)
+    created_by_month = list(
+        Certificate.objects
+        .filter(created_at__date__gte=twelve_months_ago)
+        .annotate(month=TruncMonth('created_at'))
+        .values('month')
+        .annotate(count=Count('id'), revenue=Sum('price'))
+        .order_by('month')
+    )
+
+    # Истечения на ближайшие 6 месяцев
+    six_months_ahead = today + timedelta(days=180)
+    expiry_by_month = list(
+        Certificate.objects
+        .filter(is_active=True, valid_to__gte=today, valid_to__lte=six_months_ahead)
+        .annotate(month=TruncMonth('valid_to'))
+        .values('month')
+        .annotate(count=Count('id'))
+        .order_by('month')
+    )
+
+    # Топ-5 доменов по кол-ву сертификатов
+    top_domains = list(
+        Certificate.objects.values('domain')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:5]
+    )
+
+    # Топ-5 ИНН по кол-ву сертификатов
+    top_inns = list(
+        Certificate.objects.values('inn')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:5]
+    )
+
+    # Статистика уведомлений
+    notify_stats = NotificationLog.objects.aggregate(
+        total_sent=Count('id'),
+        success=Count('id', filter=Q(success=True)),
+        failed=Count('id', filter=Q(success=False)),
+    )
+
+    # Распределение по статусам оплаты
+    payment_stats = list(
+        Certificate.objects.values('payment_status')
+        .annotate(count=Count('id'))
+        .order_by('payment_status')
     )
 
     recent_certs = Certificate.objects.order_by('-created_at')[:5]
     recent_history = CertificateHistory.objects.select_related('performed_by')[:10]
 
-    logger.debug('Dashboard загружен пользователем %s', request.user.username)
+    # Подготовка данных для Chart.js
+    chart_created_labels = [
+        entry['month'].strftime('%m.%Y') for entry in created_by_month
+    ]
+    chart_created_data = [entry['count'] for entry in created_by_month]
+    chart_created_revenue = [
+        float(entry['revenue'] or 0) for entry in created_by_month
+    ]
+
+    chart_expiry_labels = [
+        entry['month'].strftime('%m.%Y') for entry in expiry_by_month
+    ]
+    chart_expiry_data = [entry['count'] for entry in expiry_by_month]
+
+    # Donut: статусы сертификатов
+    chart_status_data = [
+        stats['active'] or 0,
+        stats['expiring'] or 0,
+        stats['expired'] or 0,
+        stats['inactive'] or 0,
+    ]
+
+    # Donut: оплата
+    payment_map = {ps['payment_status']: ps['count'] for ps in payment_stats}
+    chart_payment_data = [
+        payment_map.get('paid', 0),
+        payment_map.get('pending', 0),
+        payment_map.get('free', 0),
+    ]
 
     context = {
         **stats,
         'recent_certs': recent_certs,
         'recent_history': recent_history,
+        'notify_stats': notify_stats,
+        'top_domains': top_domains,
+        'top_inns': top_inns,
+        # JSON for Chart.js
+        'chart_created_labels': json.dumps(chart_created_labels),
+        'chart_created_data': json.dumps(chart_created_data),
+        'chart_created_revenue': json.dumps(chart_created_revenue),
+        'chart_expiry_labels': json.dumps(chart_expiry_labels),
+        'chart_expiry_data': json.dumps(chart_expiry_data),
+        'chart_status_data': json.dumps(chart_status_data),
+        'chart_payment_data': json.dumps(chart_payment_data),
     }
     return render(request, 'certificates/dashboard.html', context)
 
@@ -117,12 +213,16 @@ def certificate_list(request):
             certs = certs.filter(
                 is_active=True,
                 valid_to__gte=today,
-                valid_to__lte=today + timezone.timedelta(days=60)
+                valid_to__lte=today + timedelta(days=60)
             )
         elif status == 'expired':
             certs = certs.filter(is_active=True, valid_to__lt=today)
         elif status == 'inactive':
             certs = certs.filter(is_active=False)
+
+        payment = form.cleaned_data.get('payment', '')
+        if payment:
+            certs = certs.filter(payment_status=payment)
 
     paginator = Paginator(certs, CERTS_PER_PAGE)
     page = paginator.get_page(request.GET.get('page'))
@@ -166,6 +266,8 @@ def certificate_create(request):
                     'valid_from': str(cert.valid_from),
                     'valid_to': str(cert.valid_to),
                     'users_count': cert.users_count,
+                    'price': str(cert.price) if cert.price else None,
+                    'payment_status': cert.payment_status,
                 }
             )
 

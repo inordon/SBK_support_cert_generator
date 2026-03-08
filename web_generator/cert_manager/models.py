@@ -8,6 +8,12 @@ from django.utils import timezone
 class Certificate(models.Model):
     """Модель сертификата."""
 
+    PAYMENT_STATUS_CHOICES = [
+        ('pending', 'Ожидает оплаты'),
+        ('paid', 'Оплачен'),
+        ('free', 'Бесплатный'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     certificate_id = models.CharField(
         'ID сертификата', max_length=23, unique=True,
@@ -18,6 +24,15 @@ class Certificate(models.Model):
     valid_from = models.DateField('Действует с')
     valid_to = models.DateField('Действует до', db_index=True)
     users_count = models.PositiveIntegerField('Кол-во пользователей')
+    price = models.DecimalField(
+        'Стоимость', max_digits=10, decimal_places=2,
+        null=True, blank=True,
+        help_text='Стоимость сертификата в рублях'
+    )
+    payment_status = models.CharField(
+        'Статус оплаты', max_length=10, choices=PAYMENT_STATUS_CHOICES,
+        default='pending', db_index=True,
+    )
     created_at = models.DateTimeField('Создан', default=timezone.now)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
