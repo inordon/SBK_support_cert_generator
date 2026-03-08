@@ -53,5 +53,18 @@ def validate_inn(value):
         month = int(value[2:4])
         if month < 1 or month > 12:
             raise ValidationError('Некорректный ИНН/БИН.')
+
+        # Контрольная цифра БИН (12-й разряд)
+        weights_1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        s = sum(int(value[i]) * weights_1[i] for i in range(11))
+        remainder = s % 11
+        if remainder == 10:
+            weights_2 = [3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2]
+            s = sum(int(value[i]) * weights_2[i] for i in range(11))
+            remainder = s % 11
+            if remainder == 10:
+                raise ValidationError('Некорректная контрольная сумма БИН.')
+        if int(value[11]) != remainder:
+            raise ValidationError('Некорректная контрольная сумма БИН.')
     else:
         raise ValidationError('ИНН/БИН должен содержать 10 или 12 цифр.')

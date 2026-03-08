@@ -1,4 +1,5 @@
 import uuid
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -43,6 +44,19 @@ class Certificate(models.Model):
             models.Index(fields=['inn', 'is_active']),
             models.Index(fields=['is_active', 'valid_to']),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.contacts:
+            if not isinstance(self.contacts, list):
+                raise ValidationError({'contacts': 'Контакты должны быть списком.'})
+            for i, item in enumerate(self.contacts):
+                if not isinstance(item, dict):
+                    raise ValidationError({'contacts': f'Элемент {i} должен быть объектом.'})
+                if 'name' not in item or 'email' not in item:
+                    raise ValidationError(
+                        {'contacts': f'Элемент {i}: обязательные поля — name, email.'}
+                    )
 
     def __str__(self):
         return f'{self.certificate_id} — {self.domain}'
