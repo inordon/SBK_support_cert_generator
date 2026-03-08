@@ -149,6 +149,10 @@ class NotificationLog(models.Model):
     notification_type = models.CharField(
         'Тип уведомления', max_length=20, choices=NOTIFY_TYPE_CHOICES
     )
+    valid_to_date = models.DateField(
+        'Дата истечения на момент уведомления', null=True, blank=True,
+        help_text='Для expiry-уведомлений: к какому valid_to относится'
+    )
     sent_at = models.DateTimeField('Отправлено', default=timezone.now)
     recipients = models.TextField('Получатели', help_text='Через запятую')
     success = models.BooleanField('Успешно', default=True)
@@ -159,7 +163,12 @@ class NotificationLog(models.Model):
         ordering = ['-sent_at']
         verbose_name = 'Уведомление'
         verbose_name_plural = 'Уведомления'
-        unique_together = ['certificate', 'notification_type']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['certificate', 'notification_type', 'valid_to_date'],
+                name='unique_notification_per_period',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.certificate} — {self.get_notification_type_display()}'

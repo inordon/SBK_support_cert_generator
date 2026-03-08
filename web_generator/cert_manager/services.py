@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 def send_certificate_notification(certificate: Certificate, action: str, user=None):
     """
     Отправляет email-уведомление о действии с сертификатом.
+    Вызывается из Celery-задачи, а не из view напрямую.
 
     Args:
         certificate: объект сертификата
@@ -53,25 +54,23 @@ def send_certificate_notification(certificate: Certificate, action: str, user=No
             recipient_list=recipients,
             fail_silently=False,
         )
-        NotificationLog.objects.update_or_create(
+        NotificationLog.objects.create(
             certificate=certificate,
             notification_type=action,
-            defaults={
-                'recipients': ', '.join(recipients),
-                'success': True,
-            }
+            valid_to_date=certificate.valid_to,
+            recipients=', '.join(recipients),
+            success=True,
         )
         logger.info('Уведомление "%s" отправлено для %s', action, certificate.certificate_id)
     except Exception as e:
         logger.error('Ошибка отправки уведомления: %s', e)
-        NotificationLog.objects.update_or_create(
+        NotificationLog.objects.create(
             certificate=certificate,
             notification_type=action,
-            defaults={
-                'recipients': ', '.join(recipients),
-                'success': False,
-                'error_message': str(e),
-            }
+            valid_to_date=certificate.valid_to,
+            recipients=', '.join(recipients),
+            success=False,
+            error_message=str(e),
         )
 
 
@@ -79,16 +78,16 @@ def send_expiry_notification(certificate: Certificate, months_left: int):
     """
     Отправляет уведомление об истечении срока сертификата.
 
-    Args:
-        certificate: объект сертификата
-        months_left: 1 или 2 — через сколько месяцев истекает
+    Уникальность определяется по (certificate, notification_type, valid_to_date).
+    Если сертификат продлили (valid_to изменился), уведомление отправится снова.
     """
     notify_type = f'expiry_{months_left}m'
 
-    # Проверяем, не отправляли ли уже
+    # Проверяем, не отправляли ли уже для этого конкретного valid_to
     if NotificationLog.objects.filter(
         certificate=certificate,
         notification_type=notify_type,
+        valid_to_date=certificate.valid_to,
         success=True,
     ).exists():
         return
@@ -125,6 +124,7 @@ def send_expiry_notification(certificate: Certificate, months_left: int):
         NotificationLog.objects.create(
             certificate=certificate,
             notification_type=notify_type,
+            valid_to_date=certificate.valid_to,
             recipients=', '.join(recipients),
             success=True,
         )
@@ -135,6 +135,7 @@ def send_expiry_notification(certificate: Certificate, months_left: int):
         NotificationLog.objects.create(
             certificate=certificate,
             notification_type=notify_type,
+            valid_to_date=certificate.valid_to,
             recipients=', '.join(recipients),
             success=False,
             error_message=str(e),

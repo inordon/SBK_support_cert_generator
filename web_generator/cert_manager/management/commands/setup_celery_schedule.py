@@ -7,7 +7,7 @@ from django_celery_beat.models import PeriodicTask, CrontabSchedule
 
 
 class Command(BaseCommand):
-    help = 'Создаёт расписание Celery Beat для проверки истекающих сертификатов'
+    help = 'Создаёт/обновляет расписание Celery Beat для проверки истекающих сертификатов'
 
     def handle(self, *args, **options):
         # Ежедневно в 09:00
@@ -19,7 +19,7 @@ class Command(BaseCommand):
             month_of_year='*',
         )
 
-        task, created = PeriodicTask.objects.get_or_create(
+        task, created = PeriodicTask.objects.update_or_create(
             name='Проверка истекающих сертификатов',
             defaults={
                 'task': 'cert_manager.tasks.check_expiring_certificates',
@@ -33,6 +33,6 @@ class Command(BaseCommand):
                 'Задача "Проверка истекающих сертификатов" создана (ежедневно в 09:00)'
             ))
         else:
-            self.stdout.write(self.style.WARNING(
-                'Задача уже существует'
+            self.stdout.write(self.style.SUCCESS(
+                'Задача "Проверка истекающих сертификатов" обновлена'
             ))

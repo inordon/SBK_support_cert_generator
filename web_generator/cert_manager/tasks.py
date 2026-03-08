@@ -1,5 +1,5 @@
 """
-Celery задачи для периодической проверки сертификатов.
+Celery задачи для уведомлений и периодической проверки сертификатов.
 """
 
 import logging
@@ -8,6 +8,34 @@ from celery import shared_task
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task
+def send_certificate_notification_task(certificate_pk: str, action: str, user_pk: int = None):
+    """
+    Асинхронная отправка email-уведомления о создании/изменении сертификата.
+    Вызывается из views вместо синхронного send_certificate_notification.
+    """
+    from django.contrib.auth import get_user_model
+    from .models import Certificate
+    from .services import send_certificate_notification
+
+    User = get_user_model()
+
+    try:
+        certificate = Certificate.objects.get(pk=certificate_pk)
+    except Certificate.DoesNotExist:
+        logger.error('Сертификат %s не найден для отправки уведомления', certificate_pk)
+        return
+
+    user = None
+    if user_pk:
+        try:
+            user = User.objects.get(pk=user_pk)
+        except User.DoesNotExist:
+            pass
+
+    send_certificate_notification(certificate, action, user)
 
 
 @shared_task
