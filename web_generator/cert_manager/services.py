@@ -5,12 +5,37 @@
 import logging
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db import IntegrityError
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
 from .models import Certificate, NotificationLog
 
 logger = logging.getLogger(__name__)
+
+
+def _log_notification(certificate, notification_type, valid_to_date, recipients, success, error_message=''):
+    """Создаёт запись в логе уведомлений, обновляя при конфликте уникальности."""
+    try:
+        NotificationLog.objects.create(
+            certificate=certificate,
+            notification_type=notification_type,
+            valid_to_date=valid_to_date,
+            recipients=recipients,
+            success=success,
+            error_message=error_message,
+        )
+    except IntegrityError:
+        # Запись с таким (certificate, type, valid_to_date) уже есть — обновляем
+        NotificationLog.objects.filter(
+            certificate=certificate,
+            notification_type=notification_type,
+            valid_to_date=valid_to_date,
+        ).update(
+            recipients=recipients,
+            success=success,
+            error_message=error_message,
+        )
 
 
 def send_certificate_notification(certificate: Certificate, action: str, user=None):
@@ -45,6 +70,8 @@ def send_certificate_notification(certificate: Certificate, action: str, user=No
     html_message = render_to_string(f'email/certificate_{action}.html', context)
     plain_message = strip_tags(html_message)
 
+    recipients_str = ', '.join(recipients)
+
     try:
         send_mail(
             subject=subjects.get(action, f'Уведомление: {certificate.certificate_id}'),
@@ -54,24 +81,11 @@ def send_certificate_notification(certificate: Certificate, action: str, user=No
             recipient_list=recipients,
             fail_silently=False,
         )
-        NotificationLog.objects.create(
-            certificate=certificate,
-            notification_type=action,
-            valid_to_date=certificate.valid_to,
-            recipients=', '.join(recipients),
-            success=True,
-        )
+        _log_notification(certificate, action, certificate.valid_to, recipients_str, True)
         logger.info('Уведомление "%s" отправлено для %s', action, certificate.certificate_id)
     except Exception as e:
         logger.error('Ошибка отправки уведомления: %s', e)
-        NotificationLog.objects.create(
-            certificate=certificate,
-            notification_type=action,
-            valid_to_date=certificate.valid_to,
-            recipients=', '.join(recipients),
-            success=False,
-            error_message=str(e),
-        )
+        _log_notification(certificate, action, certificate.valid_to, recipients_str, False, str(e))
 
 
 def send_expiry_notification(certificate: Certificate, months_left: int):
@@ -112,6 +126,8 @@ def send_expiry_notification(certificate: Certificate, months_left: int):
     html_message = render_to_string('email/certificate_expiry.html', context)
     plain_message = strip_tags(html_message)
 
+    recipients_str = ', '.join(recipients)
+
     try:
         send_mail(
             subject=subject,
@@ -121,22 +137,9 @@ def send_expiry_notification(certificate: Certificate, months_left: int):
             recipient_list=recipients,
             fail_silently=False,
         )
-        NotificationLog.objects.create(
-            certificate=certificate,
-            notification_type=notify_type,
-            valid_to_date=certificate.valid_to,
-            recipients=', '.join(recipients),
-            success=True,
-        )
+        _log_notification(certificate, notify_type, certificate.valid_to, recipients_str, True)
         logger.info('Уведомление об истечении (%d мес) отправлено для %s',
                      months_left, certificate.certificate_id)
     except Exception as e:
         logger.error('Ошибка отправки уведомления об истечении: %s', e)
-        NotificationLog.objects.create(
-            certificate=certificate,
-            notification_type=notify_type,
-            valid_to_date=certificate.valid_to,
-            recipients=', '.join(recipients),
-            success=False,
-            error_message=str(e),
-        )
+        _log_notification(certificate, notify_type, certificate.valid_to, recipients_str, False, str(e))

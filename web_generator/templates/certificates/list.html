@@ -83,11 +83,11 @@
                                     <li><a class="dropdown-item" href="{% url 'certificate_detail' cert.certificate_id %}">
                                         <i class="bi bi-eye"></i> Подробнее
                                     </a></li>
+                                    {% if user.is_staff %}
                                     <li><a class="dropdown-item" href="{% url 'certificate_edit_dates' cert.certificate_id %}">
                                         <i class="bi bi-calendar-event"></i> Изменить даты
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    {% if user.is_staff %}
                                     {% if cert.is_active %}
                                     <li><a class="dropdown-item text-danger" href="{% url 'certificate_deactivate' cert.certificate_id %}">
                                         <i class="bi bi-x-circle"></i> Деактивировать
