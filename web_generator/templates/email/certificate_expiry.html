@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5;">
+    <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h2 style="color: #dc3545; margin-top: 0;">
+            Сертификат истекает через {{ months_left }} {% if months_left == 2 %}месяца{% else %}месяц{% endif %}
+        </h2>
+
+        <p>Срок действия следующего сертификата скоро заканчивается:</p>
+
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td style="padding: 8px 0; color: #666; width: 40%;">ID сертификата:</td>
+                <td style="padding: 8px 0; font-family: monospace; font-size: 16px;">{{ certificate.certificate_id }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #666;">Домен:</td>
+                <td style="padding: 8px 0;">{{ certificate.domain }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #666;">ИНН / БИН:</td>
+                <td style="padding: 8px 0; font-family: monospace;">{{ certificate.inn }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #666;">Действует до:</td>
+                <td style="padding: 8px 0; color: #dc3545; font-weight: bold;">{{ certificate.valid_to|date:"d.m.Y" }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; color: #666;">Кол-во пользователей:</td>
+                <td style="padding: 8px 0;">{{ certificate.users_count }}</td>
+            </tr>
+        </table>
+
+        <p style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 4px; color: #856404;">
+            Пожалуйста, позаботьтесь о продлении сертификата заблаговременно.
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #999; font-size: 12px; margin-bottom: 0;">
+            SBK Support Certificate Generator
+        </p>
+    </div>
+</body>
+</html>

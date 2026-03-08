@@ -1,0 +1,24 @@
+# Django
+Django>=5.1,<5.2
+gunicorn>=22.0
+whitenoise>=6.7
+
+# Database
+psycopg2-binary>=2.9
+
+# Authentication
+django-auth-ldap>=4.8
+
+# Celery & Redis
+celery>=5.4
+django-celery-beat>=2.7
+redis>=5.0
+
+# Email
+django-templated-email>=3.0
+
+# Utilities
+python-dotenv>=1.0
+django-crispy-forms>=2.3
+crispy-bootstrap5>=2024.10
+django-filter>=24.3
