@@ -131,6 +131,7 @@ class CertificateHistory(models.Model):
         ('created', 'Создан'),
         ('updated', 'Изменён'),
         ('dates_updated', 'Даты изменены'),
+        ('payment_updated', 'Оплата изменена'),
         ('deactivated', 'Деактивирован'),
         ('activated', 'Активирован'),
         ('verified', 'Проверен'),

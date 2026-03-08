@@ -152,6 +152,7 @@ class CertificateCreateViewTest(TestCase):
             'valid_from': str(today),
             'valid_to': str(today + timedelta(days=365)),
             'users_count': 100,
+            'payment_status': 'pending',
         })
         self.assertEqual(resp.status_code, 302)  # redirect to detail
         self.assertEqual(Certificate.objects.count(), 1)
@@ -166,6 +167,7 @@ class CertificateCreateViewTest(TestCase):
             'valid_from': str(today),
             'valid_to': str(today + timedelta(days=365)),
             'users_count': 100,
+            'payment_status': 'pending',
         })
         self.assertEqual(resp.status_code, 200)  # re-renders form
         self.assertEqual(Certificate.objects.count(), 0)
@@ -189,6 +191,7 @@ class CertificateRBACTest(TestCase):
             'valid_from': str(today),
             'valid_to': str(today + timedelta(days=365)),
             'users_count': 50,
+            'payment_status': 'pending',
         })
         self.cert = Certificate.objects.first()
 
