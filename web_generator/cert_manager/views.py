@@ -5,10 +5,12 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.paginator import Paginator
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.db.models import Q, Count, Case, When, Value, BooleanField
+from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .decorators import admin_required
 from .forms import CertificateCreateForm, CertificateEditDatesForm, CertificateSearchForm
@@ -42,10 +44,21 @@ def login_view(request):
     return render(request, 'registration/login.html', {'form': form})
 
 
+@require_POST
 def logout_view(request):
     logger.info('Пользователь %s вышел из системы', request.user.username)
     logout(request)
     return redirect('login')
+
+
+def healthz(request):
+    """Health-check endpoint для Docker и внешних мониторингов."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+        return JsonResponse({'status': 'ok'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'detail': str(e)}, status=503)
 
 
 @login_required

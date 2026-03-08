@@ -116,7 +116,8 @@ if LDAP_ENABLED:
     import ldap
     from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
 
-    AUTHENTICATION_BACKENDS.insert(0, 'django_auth_ldap.backend.LDAPBackend')
+    # Вставляем после Axes (index 0), чтобы блокировка brute-force работала
+    AUTHENTICATION_BACKENDS.insert(1, 'django_auth_ldap.backend.LDAPBackend')
 
     AUTH_LDAP_SERVER_URI = os.getenv('LDAP_SERVER_URI', 'ldap://ldap.example.com')
     AUTH_LDAP_BIND_DN = os.getenv('LDAP_BIND_DN', '')
@@ -242,24 +243,31 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': _formatter,
         },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'app.log'),
+            'maxBytes': 10 * 1024 * 1024,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'json',
+        },
     },
     'root': {
-        'handlers': ['console'],
+        'handlers': ['console', 'file'],
         'level': LOG_LEVEL,
     },
     'loggers': {
         'django': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file'],
             'level': LOG_LEVEL,
             'propagate': False,
         },
         'cert_manager': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file'],
             'level': LOG_LEVEL,
             'propagate': False,
         },
         'celery': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file'],
             'level': LOG_LEVEL,
             'propagate': False,
         },
