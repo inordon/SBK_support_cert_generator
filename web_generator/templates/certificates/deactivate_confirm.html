@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Деактивация сертификата — SBK Cert Generator{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1><i class="bi bi-x-circle"></i> Деактивация сертификата</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-danger">
+            <div class="card-body">
+                <p>Вы уверены, что хотите деактивировать сертификат?</p>
+
+                <table class="table table-bordered">
+                    <tr>
+                        <th>ID сертификата</th>
+                        <td><code>{{ certificate.certificate_id }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Домен</th>
+                        <td>{{ certificate.domain }}</td>
+                    </tr>
+                    <tr>
+                        <th>ИНН/БИН</th>
+                        <td>{{ certificate.inn }}</td>
+                    </tr>
+                    <tr>
+                        <th>Период действия</th>
+                        <td>{{ certificate.validity_period }}</td>
+                    </tr>
+                </table>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-x-circle"></i> Деактивировать
+                        </button>
+                        <a href="{% url 'certificate_detail' certificate.certificate_id %}" class="btn btn-outline-secondary">
+                            Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
