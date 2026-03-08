@@ -10,8 +10,13 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-@shared_task
-def send_certificate_notification_task(certificate_pk: str, action: str, user_pk: int = None):
+@shared_task(
+    autoretry_for=(Exception,),
+    retry_backoff=60,
+    retry_backoff_max=600,
+    max_retries=3,
+)
+def send_certificate_notification_task(certificate_pk: str, action: str, user_pk=None):
     """
     Асинхронная отправка email-уведомления о создании/изменении сертификата.
     Вызывается из views вместо синхронного send_certificate_notification.
@@ -64,8 +69,8 @@ def check_expiring_certificates():
 
     sent_2m = 0
     for cert in certs_2m:
-        send_expiry_notification(cert, months_left=2)
-        sent_2m += 1
+        if send_expiry_notification(cert, months_left=2):
+            sent_2m += 1
 
     # За 1 месяц (примерно 30 дней)
     target_1m = today + timedelta(days=30)
@@ -80,8 +85,8 @@ def check_expiring_certificates():
 
     sent_1m = 0
     for cert in certs_1m:
-        send_expiry_notification(cert, months_left=1)
-        sent_1m += 1
+        if send_expiry_notification(cert, months_left=1):
+            sent_1m += 1
 
     logger.info(
         'Проверка завершена: %d уведомлений за 2 мес, %d за 1 мес',

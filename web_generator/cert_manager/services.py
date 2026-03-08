@@ -74,9 +74,10 @@ def send_certificate_notification(certificate: Certificate, action: str, user=No
         )
 
 
-def send_expiry_notification(certificate: Certificate, months_left: int):
+def send_expiry_notification(certificate: Certificate, months_left: int) -> bool:
     """
     Отправляет уведомление об истечении срока сертификата.
+    Возвращает True, если уведомление было реально отправлено.
 
     Уникальность определяется по (certificate, notification_type, valid_to_date).
     Если сертификат продлили (valid_to изменился), уведомление отправится снова.
@@ -90,14 +91,14 @@ def send_expiry_notification(certificate: Certificate, months_left: int):
         valid_to_date=certificate.valid_to,
         success=True,
     ).exists():
-        return
+        return False
 
     recipients = [r.strip() for r in settings.CERT_NOTIFICATION_RECIPIENTS if r.strip()]
     if certificate.request_email:
         recipients.append(certificate.request_email)
 
     if not recipients:
-        return
+        return False
 
     subject = (
         f'Сертификат {certificate.certificate_id} истекает '
@@ -130,6 +131,7 @@ def send_expiry_notification(certificate: Certificate, months_left: int):
         )
         logger.info('Уведомление об истечении (%d мес) отправлено для %s',
                      months_left, certificate.certificate_id)
+        return True
     except Exception as e:
         logger.error('Ошибка отправки уведомления об истечении: %s', e)
         NotificationLog.objects.create(
@@ -140,3 +142,4 @@ def send_expiry_notification(certificate: Certificate, months_left: int):
             success=False,
             error_message=str(e),
         )
+        return False

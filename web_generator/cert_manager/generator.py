@@ -14,24 +14,14 @@ class CertificateIDGenerator:
     CHARACTERS = string.ascii_uppercase + string.digits
     MAX_ATTEMPTS = 1000
 
-    def generate(self, valid_to: date, existing_ids=None) -> str:
+    def generate(self, valid_to: date) -> str:
         """
-        Генерирует уникальный ID сертификата.
+        Генерирует ID сертификата.
         Последние 4 символа последнего блока = MMYY (месяц/год окончания).
+        Уникальность обеспечивается DB unique constraint в views.
         """
-        if existing_ids is None:
-            existing_ids = set()
-
         suffix = f'{valid_to.month:02d}{valid_to.year % 100:02d}'
-
-        for _ in range(self.MAX_ATTEMPTS):
-            cert_id = self._build_id(suffix)
-            if cert_id not in existing_ids:
-                return cert_id
-
-        raise RuntimeError(
-            f'Не удалось сгенерировать уникальный ID за {self.MAX_ATTEMPTS} попыток'
-        )
+        return self._build_id(suffix)
 
     def _build_id(self, suffix: str) -> str:
         block = lambda: ''.join(random.choices(self.CHARACTERS, k=5))
