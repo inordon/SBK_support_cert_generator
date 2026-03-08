@@ -75,7 +75,12 @@ class CertificateCreateForm(forms.ModelForm):
 
 
 class CertificateEditDatesForm(forms.Form):
-    """Форма редактирования дат сертификата."""
+    """Форма редактирования дат сертификата.
+
+    Намеренно разрешает valid_from в прошлом — для корректировки ошибочно
+    введённых дат. В отличие от CertificateCreateForm, здесь нет запрета
+    на прошлые даты.
+    """
 
     new_valid_from = forms.DateField(
         label='Новая дата начала',

@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc \
+        curl \
         libpq-dev \
         libldap2-dev \
         libsasl2-dev \
