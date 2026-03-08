@@ -5,8 +5,9 @@ from .models import Certificate, CertificateHistory, NotificationLog
 @admin.register(Certificate)
 class CertificateAdmin(admin.ModelAdmin):
     list_display = ['certificate_id', 'domain', 'inn', 'valid_from',
-                    'valid_to', 'users_count', 'is_active', 'created_at']
-    list_filter = ['is_active', 'created_at']
+                    'valid_to', 'users_count', 'price', 'payment_status',
+                    'is_active', 'created_at']
+    list_filter = ['is_active', 'payment_status', 'created_at']
     search_fields = ['certificate_id', 'domain', 'inn']
     readonly_fields = ['certificate_id', 'created_at', 'updated_at']
 

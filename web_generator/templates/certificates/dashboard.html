@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+{% load cert_tags %}
+
+{% block title %}Дашборд — SBK Cert Generator{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="bi bi-speedometer2"></i> Дашборд</h2>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div class="row mb-4 g-3">
+    <div class="col-sm-6 col-xl">
+        <div class="card text-bg-primary h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small">Всего</div>
+                        <div class="display-6">{{ total }}</div>
+                    </div>
+                    <i class="bi bi-file-earmark-lock display-4 text-white-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl">
+        <div class="card text-bg-success h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small">Активных</div>
+                        <div class="display-6">{{ active }}</div>
+                    </div>
+                    <i class="bi bi-check-circle display-4 text-white-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl">
+        <div class="card text-bg-warning h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small">Истекающих</div>
+                        <div class="display-6">{{ expiring }}</div>
+                    </div>
+                    <i class="bi bi-exclamation-triangle display-4 text-white-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl">
+        <div class="card text-bg-danger h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small">Просроченных</div>
+                        <div class="display-6">{{ expired }}</div>
+                    </div>
+                    <i class="bi bi-x-circle display-4 text-white-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl">
+        <div class="card text-bg-secondary h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small">Неактивных</div>
+                        <div class="display-6">{{ inactive }}</div>
+                    </div>
+                    <i class="bi bi-slash-circle display-4 text-white-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Финансы -->
+<div class="row mb-4 g-3">
+    <div class="col-sm-6 col-xl-4">
+        <div class="card border-success h-100">
+            <div class="card-body">
+                <div class="text-muted small">Выручка (оплачено)</div>
+                <div class="fs-4 text-success fw-bold">
+                    {{ total_revenue|default:"0"|floatformat:2 }} &#8381;
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="card border-warning h-100">
+            <div class="card-body">
+                <div class="text-muted small">Ожидает оплаты</div>
+                <div class="fs-4 text-warning fw-bold">
+                    {{ pending_revenue|default:"0"|floatformat:2 }} &#8381;
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-12 col-xl-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted small">Уведомления</div>
+                <div class="d-flex gap-3 align-items-baseline">
+                    <span class="fs-4 fw-bold">{{ notify_stats.total_sent }}</span>
+                    <small class="text-success">{{ notify_stats.success }} ok</small>
+                    {% if notify_stats.failed %}
+                    <small class="text-danger">{{ notify_stats.failed }} err</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Графики -->
+<div class="row mb-4 g-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Создание сертификатов по месяцам</h6></div>
+            <div class="card-body">
+                <canvas id="chartCreated" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Истечения на ближайшие 6 месяцев</h6></div>
+            <div class="card-body">
+                <canvas id="chartExpiry" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4 g-4">
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Статусы сертификатов</h6></div>
+            <div class="card-body d-flex justify-content-center">
+                <canvas id="chartStatus" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Статусы оплаты</h6></div>
+            <div class="card-body d-flex justify-content-center">
+                <canvas id="chartPayment" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Выручка по месяцам</h6></div>
+            <div class="card-body">
+                <canvas id="chartRevenue" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Топ доменов и ИНН -->
+<div class="row mb-4 g-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Топ доменов</h6></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Домен</th><th class="text-end">Кол-во</th></tr></thead>
+                    <tbody>
+                        {% for item in top_domains %}
+                        <tr>
+                            <td>{{ item.domain }}</td>
+                            <td class="text-end"><span class="badge bg-primary">{{ item.count }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="2" class="text-center text-muted py-3">Нет данных</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Топ ИНН / БИН</h6></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>ИНН/БИН</th><th class="text-end">Кол-во</th></tr></thead>
+                    <tbody>
+                        {% for item in top_inns %}
+                        <tr>
+                            <td class="font-monospace">{{ item.inn }}</td>
+                            <td class="text-end"><span class="badge bg-primary">{{ item.count }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="2" class="text-center text-muted py-3">Нет данных</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Последние сертификаты -->
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Последние сертификаты</h5>
+                <a href="{% url 'certificate_list' %}" class="btn btn-sm btn-outline-primary">Все</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Домен</th>
+                                <th>Статус</th>
+                                <th>Дата создания</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cert in recent_certs %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'certificate_detail' cert.certificate_id %}">
+                                        {{ cert.certificate_id|truncatechars:15 }}
+                                    </a>
+                                </td>
+                                <td>{{ cert.domain }}</td>
+                                <td>{{ cert|status_badge }}</td>
+                                <td>{{ cert.created_at|date:"d.m.Y H:i" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">Нет сертификатов</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Последние действия -->
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Последние действия</h5>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for entry in recent_history %}
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>{{ entry.get_action_display }}</strong><br>
+                                <small class="text-muted">
+                                    <a href="{% url 'certificate_detail' entry.certificate_id %}">
+                                        {{ entry.certificate_id|truncatechars:15 }}
+                                    </a>
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted">{{ entry.performed_at|date:"d.m.Y H:i" }}</small><br>
+                                <small class="text-muted">{{ entry.performed_by|default:"—" }}</small>
+                            </div>
+                        </div>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-center text-muted py-3">Нет действий</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const createdLabels = {{ chart_created_labels|safe }};
+    const createdData = {{ chart_created_data|safe }};
+    const createdRevenue = {{ chart_created_revenue|safe }};
+    const expiryLabels = {{ chart_expiry_labels|safe }};
+    const expiryData = {{ chart_expiry_data|safe }};
+    const statusData = {{ chart_status_data|safe }};
+    const paymentData = {{ chart_payment_data|safe }};
+
+    // Создание сертификатов по месяцам
+    new Chart(document.getElementById('chartCreated'), {
+        type: 'bar',
+        data: {
+            labels: createdLabels,
+            datasets: [{
+                label: 'Создано',
+                data: createdData,
+                backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+    });
+
+    // Истечения
+    new Chart(document.getElementById('chartExpiry'), {
+        type: 'bar',
+        data: {
+            labels: expiryLabels,
+            datasets: [{
+                label: 'Истекает',
+                data: expiryData,
+                backgroundColor: 'rgba(255, 193, 7, 0.7)',
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+    });
+
+    // Статусы (donut)
+    new Chart(document.getElementById('chartStatus'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Активные', 'Истекающие', 'Просроченные', 'Неактивные'],
+            datasets: [{
+                data: statusData,
+                backgroundColor: ['#198754', '#ffc107', '#dc3545', '#6c757d'],
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }
+        }
+    });
+
+    // Оплата (donut)
+    new Chart(document.getElementById('chartPayment'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Оплачен', 'Ожидает', 'Бесплатный'],
+            datasets: [{
+                data: paymentData,
+                backgroundColor: ['#198754', '#ffc107', '#0dcaf0'],
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }
+        }
+    });
+
+    // Выручка по месяцам
+    new Chart(document.getElementById('chartRevenue'), {
+        type: 'line',
+        data: {
+            labels: createdLabels,
+            datasets: [{
+                label: 'Выручка (руб.)',
+                data: createdRevenue,
+                borderColor: '#198754',
+                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                fill: true,
+                tension: 0.3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+})();
+</script>
+{% endblock %}

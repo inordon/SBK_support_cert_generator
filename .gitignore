@@ -177,6 +177,9 @@ backups/
 # Certificates data (if using local storage)
 certificates/
 
+# Django static (collected)
+staticfiles/
+
 # Docker data (if using bind mounts)
 data/
 

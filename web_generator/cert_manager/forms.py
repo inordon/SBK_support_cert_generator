@@ -40,6 +40,19 @@ class CertificateCreateForm(forms.ModelForm):
             'placeholder': 'Минимум 1', 'class': 'form-control'
         })
     )
+    price = forms.DecimalField(
+        label='Стоимость (руб.)', required=False, min_value=0,
+        decimal_places=2, max_digits=10,
+        widget=forms.NumberInput(attrs={
+            'placeholder': '0.00', 'class': 'form-control', 'step': '0.01'
+        })
+    )
+    payment_status = forms.ChoiceField(
+        label='Статус оплаты',
+        choices=Certificate.PAYMENT_STATUS_CHOICES,
+        initial='pending',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
     request_email = forms.EmailField(
         label='Email для запросов', required=False,
         widget=forms.EmailInput(attrs={
@@ -50,7 +63,7 @@ class CertificateCreateForm(forms.ModelForm):
     class Meta:
         model = Certificate
         fields = ['domain', 'inn', 'valid_from', 'valid_to',
-                  'users_count', 'request_email']
+                  'users_count', 'price', 'payment_status', 'request_email']
 
     def clean(self):
         cleaned = super().clean()
@@ -134,6 +147,16 @@ class CertificateSearchForm(forms.Form):
             ('expiring', 'Истекающие'),
             ('expired', 'Просроченные'),
             ('inactive', 'Деактивированные'),
+        ],
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    payment = forms.ChoiceField(
+        label='Оплата', required=False,
+        choices=[
+            ('', 'Все'),
+            ('pending', 'Ожидает оплаты'),
+            ('paid', 'Оплачен'),
+            ('free', 'Бесплатный'),
         ],
         widget=forms.Select(attrs={'class': 'form-select'})
     )
