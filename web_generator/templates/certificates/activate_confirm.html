@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Активация — {{ certificate.certificate_id }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-check-circle"></i> Активация сертификата</h5>
+            </div>
+            <div class="card-body">
+                <p>Вы уверены, что хотите активировать сертификат?</p>
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">ID</dt>
+                    <dd class="col-sm-8 font-monospace">{{ certificate.certificate_id }}</dd>
+                    <dt class="col-sm-4">Домен</dt>
+                    <dd class="col-sm-8">{{ certificate.domain }}</dd>
+                    <dt class="col-sm-4">ИНН</dt>
+                    <dd class="col-sm-8">{{ certificate.inn }}</dd>
+                    <dt class="col-sm-4">Период</dt>
+                    <dd class="col-sm-8">{{ certificate.validity_period }}</dd>
+                </dl>
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> Активировать
+                    </button>
+                </form>
+                <a href="{% url 'certificate_detail' certificate.certificate_id %}"
+                   class="btn btn-outline-secondary">Отмена</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

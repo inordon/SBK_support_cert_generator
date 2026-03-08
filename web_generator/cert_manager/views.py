@@ -1,15 +1,25 @@
+import logging
+
 from django.contrib import messages
-from django.contrib.auth import login, authenticate, logout
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
-from django.db.models import Q, Count
+from django.core.paginator import Paginator
+from django.db import IntegrityError
+from django.db.models import Q, Count, Case, When, Value, BooleanField
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 
+from .decorators import admin_required
 from .forms import CertificateCreateForm, CertificateEditDatesForm, CertificateSearchForm
 from .generator import CertificateIDGenerator
 from .models import Certificate, CertificateHistory, NotificationLog
-from .services import send_certificate_notification
+from .tasks import send_certificate_notification_task
+
+logger = logging.getLogger(__name__)
+
+CERTS_PER_PAGE = 25
+LOGS_PER_PAGE = 50
 
 
 def login_view(request):
@@ -21,8 +31,11 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
+            logger.info('Пользователь %s вошёл в систему', user.username)
             next_url = request.GET.get('next', 'dashboard')
             return redirect(next_url)
+        else:
+            logger.warning('Неудачная попытка входа: %s', request.POST.get('username', ''))
     else:
         form = AuthenticationForm()
 
@@ -30,35 +43,36 @@ def login_view(request):
 
 
 def logout_view(request):
+    logger.info('Пользователь %s вышел из системы', request.user.username)
     logout(request)
     return redirect('login')
 
 
 @login_required
 def dashboard(request):
-    """Главная страница — дашборд со статистикой."""
+    """Главная страница — дашборд со статистикой (один агрегирующий запрос)."""
     today = timezone.now().date()
-    certs = Certificate.objects.all()
+    expiry_threshold = today + timezone.timedelta(days=60)
 
-    total = certs.count()
-    active = certs.filter(is_active=True, valid_from__lte=today, valid_to__gte=today).count()
-    expiring = certs.filter(
-        is_active=True,
-        valid_to__gte=today,
-        valid_to__lte=today + timezone.timedelta(days=60)
-    ).count()
-    expired = certs.filter(is_active=True, valid_to__lt=today).count()
-    inactive = certs.filter(is_active=False).count()
+    stats = Certificate.objects.aggregate(
+        total=Count('id'),
+        active=Count('id', filter=Q(
+            is_active=True, valid_from__lte=today, valid_to__gte=today
+        )),
+        expiring=Count('id', filter=Q(
+            is_active=True, valid_to__gte=today, valid_to__lte=expiry_threshold
+        )),
+        expired=Count('id', filter=Q(is_active=True, valid_to__lt=today)),
+        inactive=Count('id', filter=Q(is_active=False)),
+    )
 
-    recent_certs = certs[:5]
+    recent_certs = Certificate.objects.order_by('-created_at')[:5]
     recent_history = CertificateHistory.objects.select_related('performed_by')[:10]
 
+    logger.debug('Dashboard загружен пользователем %s', request.user.username)
+
     context = {
-        'total': total,
-        'active': active,
-        'expiring': expiring,
-        'expired': expired,
-        'inactive': inactive,
+        **stats,
         'recent_certs': recent_certs,
         'recent_history': recent_history,
     }
@@ -67,7 +81,7 @@ def dashboard(request):
 
 @login_required
 def certificate_list(request):
-    """Список сертификатов с поиском и фильтрацией."""
+    """Список сертификатов с поиском, фильтрацией и пагинацией."""
     form = CertificateSearchForm(request.GET)
     certs = Certificate.objects.select_related('created_by').all()
 
@@ -97,30 +111,38 @@ def certificate_list(request):
         elif status == 'inactive':
             certs = certs.filter(is_active=False)
 
+    paginator = Paginator(certs, CERTS_PER_PAGE)
+    page = paginator.get_page(request.GET.get('page'))
+
     return render(request, 'certificates/list.html', {
-        'certificates': certs,
+        'page_obj': page,
         'form': form,
     })
 
 
-@login_required
+@admin_required
 def certificate_create(request):
     """Создание нового сертификата."""
     if request.method == 'POST':
         form = CertificateCreateForm(request.POST)
         if form.is_valid():
             cert = form.save(commit=False)
-
-            # Генерируем уникальный ID
-            generator = CertificateIDGenerator()
-            existing_ids = set(
-                Certificate.objects.values_list('certificate_id', flat=True)
-            )
-            cert.certificate_id = generator.generate(cert.valid_to, existing_ids)
             cert.created_by = request.user
-            cert.save()
 
-            # История
+            # Генерируем уникальный ID с retry через DB unique constraint
+            generator = CertificateIDGenerator()
+            for attempt in range(10):
+                cert.certificate_id = generator.generate(cert.valid_to)
+                try:
+                    cert.save()
+                    break
+                except IntegrityError:
+                    if attempt == 9:
+                        logger.error('Не удалось сохранить сертификат: исчерпаны попытки генерации ID')
+                        messages.error(request, 'Ошибка генерации уникального ID. Попробуйте ещё раз.')
+                        return render(request, 'certificates/create.html', {'form': form})
+                    continue
+
             CertificateHistory.objects.create(
                 certificate=cert,
                 action='created',
@@ -134,9 +156,15 @@ def certificate_create(request):
                 }
             )
 
-            # Email-уведомление
-            send_certificate_notification(cert, action='created', user=request.user)
+            # Email-уведомление через Celery
+            send_certificate_notification_task.delay(
+                str(cert.pk), 'created', request.user.pk
+            )
 
+            logger.info(
+                'Сертификат %s создан пользователем %s',
+                cert.certificate_id, request.user.username
+            )
             messages.success(
                 request,
                 f'Сертификат {cert.certificate_id} успешно создан.'
@@ -160,7 +188,7 @@ def certificate_detail(request, cert_id):
     })
 
 
-@login_required
+@admin_required
 def certificate_edit_dates(request, cert_id):
     """Редактирование дат сертификата."""
     cert = get_object_or_404(Certificate, certificate_id=cert_id)
@@ -188,8 +216,15 @@ def certificate_edit_dates(request, cert_id):
                 }
             )
 
-            send_certificate_notification(cert, action='updated', user=request.user)
+            # Email-уведомление через Celery
+            send_certificate_notification_task.delay(
+                str(cert.pk), 'updated', request.user.pk
+            )
 
+            logger.info(
+                'Даты сертификата %s изменены пользователем %s',
+                cert.certificate_id, request.user.username
+            )
             messages.success(request, 'Даты сертификата обновлены.')
             return redirect('certificate_detail', cert_id=cert.certificate_id)
     else:
@@ -204,7 +239,7 @@ def certificate_edit_dates(request, cert_id):
     })
 
 
-@login_required
+@admin_required
 def certificate_deactivate(request, cert_id):
     """Деактивация сертификата."""
     cert = get_object_or_404(Certificate, certificate_id=cert_id)
@@ -219,6 +254,10 @@ def certificate_deactivate(request, cert_id):
             performed_by=request.user,
         )
 
+        logger.info(
+            'Сертификат %s деактивирован пользователем %s',
+            cert.certificate_id, request.user.username
+        )
         messages.success(request, f'Сертификат {cert.certificate_id} деактивирован.')
         return redirect('certificate_detail', cert_id=cert.certificate_id)
 
@@ -227,9 +266,9 @@ def certificate_deactivate(request, cert_id):
     })
 
 
-@login_required
+@admin_required
 def certificate_activate(request, cert_id):
-    """Активация сертификата."""
+    """Активация сертификата (с подтверждающей страницей)."""
     cert = get_object_or_404(Certificate, certificate_id=cert_id)
 
     if request.method == 'POST':
@@ -242,14 +281,23 @@ def certificate_activate(request, cert_id):
             performed_by=request.user,
         )
 
+        logger.info(
+            'Сертификат %s активирован пользователем %s',
+            cert.certificate_id, request.user.username
+        )
         messages.success(request, f'Сертификат {cert.certificate_id} активирован.')
         return redirect('certificate_detail', cert_id=cert.certificate_id)
 
-    return redirect('certificate_detail', cert_id=cert.certificate_id)
+    return render(request, 'certificates/activate_confirm.html', {
+        'certificate': cert,
+    })
 
 
 @login_required
 def notification_log(request):
-    """Журнал отправленных уведомлений."""
+    """Журнал отправленных уведомлений с пагинацией."""
     logs = NotificationLog.objects.select_related('certificate').all()
-    return render(request, 'certificates/notifications.html', {'logs': logs})
+    paginator = Paginator(logs, LOGS_PER_PAGE)
+    page = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'certificates/notifications.html', {'page_obj': page})

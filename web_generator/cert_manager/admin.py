@@ -20,7 +20,8 @@ class CertificateHistoryAdmin(admin.ModelAdmin):
 
 @admin.register(NotificationLog)
 class NotificationLogAdmin(admin.ModelAdmin):
-    list_display = ['certificate', 'notification_type', 'sent_at', 'success']
+    list_display = ['certificate', 'notification_type', 'valid_to_date',
+                    'sent_at', 'success']
     list_filter = ['notification_type', 'success', 'sent_at']
-    readonly_fields = ['certificate', 'notification_type', 'sent_at',
-                       'recipients', 'success', 'error_message']
+    readonly_fields = ['certificate', 'notification_type', 'valid_to_date',
+                       'sent_at', 'recipients', 'success', 'error_message']

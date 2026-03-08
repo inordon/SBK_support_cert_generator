@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Уведомления — SBK Cert Generator{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="bi bi-bell"></i> Журнал уведомлений</h2>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Дата</th>
+                        <th>Сертификат</th>
+                        <th>Тип</th>
+                        <th>Получатели</th>
+                        <th>Статус</th>
+                        <th>Ошибка</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in page_obj %}
+                    <tr>
+                        <td>{{ log.sent_at|date:"d.m.Y H:i" }}</td>
+                        <td>
+                            <a href="{% url 'certificate_detail' log.certificate.certificate_id %}">
+                                {{ log.certificate.certificate_id|truncatechars:15 }}
+                            </a>
+                        </td>
+                        <td>{{ log.get_notification_type_display }}</td>
+                        <td><small>{{ log.recipients }}</small></td>
+                        <td>
+                            {% if log.success %}
+                            <span class="badge bg-success">OK</span>
+                            {% else %}
+                            <span class="badge bg-danger">Ошибка</span>
+                            {% endif %}
+                        </td>
+                        <td><small class="text-danger">{{ log.error_message }}</small></td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            Уведомления ещё не отправлялись
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer">
+        {% include "includes/pagination.html" %}
+    </div>
+</div>
+{% endblock %}
