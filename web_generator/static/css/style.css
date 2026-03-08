@@ -1,0 +1,42 @@
+/* SBK Cert Generator — custom styles */
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+}
+
+main {
+    flex: 1;
+}
+
+.font-monospace {
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+}
+
+/* Dashboard stat cards */
+.card .display-6 {
+    font-weight: 700;
+}
+
+/* Table hover */
+.table-hover tbody tr:hover {
+    cursor: pointer;
+}
+
+/* Login card centering */
+.card.shadow {
+    border: none;
+}
+
+/* Badge improvements */
+.badge {
+    font-weight: 500;
+    padding: 0.4em 0.65em;
+}
+
+/* Navbar brand */
+.navbar-brand i {
+    margin-right: 4px;
+}
