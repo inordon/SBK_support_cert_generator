@@ -129,6 +129,23 @@ class CertificateEditDatesForm(forms.Form):
         return cleaned
 
 
+class CertificatePaymentForm(forms.Form):
+    """Форма изменения стоимости и статуса оплаты."""
+
+    price = forms.DecimalField(
+        label='Стоимость (руб.)', required=False, min_value=0,
+        decimal_places=2, max_digits=10,
+        widget=forms.NumberInput(attrs={
+            'placeholder': '0.00', 'class': 'form-control', 'step': '0.01'
+        })
+    )
+    payment_status = forms.ChoiceField(
+        label='Статус оплаты',
+        choices=Certificate.PAYMENT_STATUS_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+
 class CertificateSearchForm(forms.Form):
     """Форма поиска сертификатов."""
 

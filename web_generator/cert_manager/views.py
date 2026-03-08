@@ -17,7 +17,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .decorators import admin_required
-from .forms import CertificateCreateForm, CertificateEditDatesForm, CertificateSearchForm
+from .forms import (
+    CertificateCreateForm, CertificateEditDatesForm,
+    CertificatePaymentForm, CertificateSearchForm,
+)
 from .generator import CertificateIDGenerator
 from .models import Certificate, CertificateHistory, NotificationLog
 from .tasks import send_certificate_notification_task
@@ -405,6 +408,51 @@ def certificate_activate(request, cert_id):
 
     return render(request, 'certificates/activate_confirm.html', {
         'certificate': cert,
+    })
+
+
+@admin_required
+def certificate_update_payment(request, cert_id):
+    """Изменение стоимости и статуса оплаты."""
+    cert = get_object_or_404(Certificate, certificate_id=cert_id)
+
+    if request.method == 'POST':
+        form = CertificatePaymentForm(request.POST)
+        if form.is_valid():
+            old_price = cert.price
+            old_status = cert.payment_status
+
+            cert.price = form.cleaned_data['price']
+            cert.payment_status = form.cleaned_data['payment_status']
+            cert.save(update_fields=['price', 'payment_status', 'updated_at'])
+
+            CertificateHistory.objects.create(
+                certificate=cert,
+                action='payment_updated',
+                performed_by=request.user,
+                details={
+                    'old_price': str(old_price) if old_price else None,
+                    'new_price': str(cert.price) if cert.price else None,
+                    'old_payment_status': old_status,
+                    'new_payment_status': cert.payment_status,
+                }
+            )
+
+            logger.info(
+                'Оплата сертификата %s изменена пользователем %s',
+                cert.certificate_id, request.user.username
+            )
+            messages.success(request, 'Данные оплаты обновлены.')
+            return redirect('certificate_detail', cert_id=cert.certificate_id)
+    else:
+        form = CertificatePaymentForm(initial={
+            'price': cert.price,
+            'payment_status': cert.payment_status,
+        })
+
+    return render(request, 'certificates/update_payment.html', {
+        'certificate': cert,
+        'form': form,
     })
 
 

@@ -17,6 +17,10 @@
            class="btn btn-outline-primary btn-sm">
             <i class="bi bi-calendar-event"></i> Изменить даты
         </a>
+        <a href="{% url 'certificate_update_payment' certificate.certificate_id %}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-cash-coin"></i> Изменить оплату
+        </a>
         {% if certificate.is_active %}
         <a href="{% url 'certificate_deactivate' certificate.certificate_id %}"
            class="btn btn-outline-danger btn-sm">

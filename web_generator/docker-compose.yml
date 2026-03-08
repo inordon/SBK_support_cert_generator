@@ -30,7 +30,7 @@ services:
     volumes:
       - ./logs:/app/logs
     entrypoint: []
-    command: celery -A web_generator worker -l info
+    command: sh -c "mkdir -p /app/logs && celery -A web_generator worker -l info"
 
   celery-beat:
     build: .
@@ -40,8 +40,10 @@ services:
       - .env
     depends_on:
       - redis
+    volumes:
+      - ./logs:/app/logs
     entrypoint: []
-    command: celery -A web_generator beat -l info
+    command: sh -c "mkdir -p /app/logs && celery -A web_generator beat -l info"
 
   redis:
     image: redis:7-alpine

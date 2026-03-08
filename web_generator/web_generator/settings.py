@@ -226,6 +226,8 @@ LOG_FORMAT = os.getenv('LOG_FORMAT', 'text')  # 'text' или 'json'
 
 _formatter = 'json' if LOG_FORMAT == 'json' else 'verbose'
 
+os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
